@@ -1,0 +1,14 @@
+# Set default behavior to automatically handle line endings
+* text=auto
+
+# Explicitly declare text files you want to always be normalized to LF
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.txt text eol=lf
+.gitignore text eol=lf
+.env.example text eol=lf
+LICENSE text eol=lf

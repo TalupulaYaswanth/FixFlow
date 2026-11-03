@@ -29,3 +29,4 @@ Instead, please report vulnerabilities by contacting the maintainers or opening 
 - **Initial Response:** Within 48 hours of receipt.
 - **Status Update:** Regular updates every 3 business days while investigating.
 - **Resolution:** A patch will be published as soon as verification is complete.
+

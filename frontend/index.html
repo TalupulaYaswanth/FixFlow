@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FixFlow Studio | Smart Text, Slide & Prompt Correction Powered by DP & NLP</title>
+  <meta name="description" content="FixFlow is a high-performance text and document correction studio combining Dynamic Programming (Levenshtein, LCS, Viterbi) with rule-based NLP and LLM prompt engineering.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22 0%22 100%22 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body>
+
+  <!-- ======================================================================
+       MAIN APPLICATION LAYOUT WITH COLLAPSIBLE SIDEBAR
+       ====================================================================== -->
+  <div class="app-layout">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="app-sidebar" id="appSidebar">
+      <!-- Sidebar Header / Brand -->
+      <div class="sidebar-top">
+        <div class="brand-section">
+          <div class="logo-badge">⚡</div>
+          <div class="brand-titles">
+            <h1>FixFlow</h1>
+            <span class="brand-badge">STUDIO v2.5</span>
+          </div>
+        </div>
+        <button class="sidebar-toggle-btn" id="sidebarCollapseBtn" title="Toggle Sidebar Width">
+          <span id="collapseIcon">◀</span>
+        </button>
+      </div>
+
+      <!-- New Conversation Action Button -->
+      <div class="sidebar-action-wrap">
+        <button class="btn-new-conversation" id="newConversationBtn" title="Start new conversation / session (Ctrl+N)">
+          <div class="new-conv-left">
+            <span class="new-conv-icon-box">＋</span>
+            <span class="new-conv-label">New Conversation</span>
+          </div>
+          <kbd class="new-conv-shortcut">Ctrl+N</kbd>
+        </button>
+      </div>
+
+      <!-- Live API Status Indicator -->
+      <div class="sidebar-status-pill" id="sidebarStatusPill">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting API...</span>
+      </div>
+
+      <!-- Navigation Menu -->
+      <nav class="sidebar-nav" id="sidebarNav">
+        <div class="sidebar-nav-heading">Linguistic Studios</div>
+        <button class="sidebar-nav-btn active" data-page="direct">
+          <span class="nav-icon">✍️</span>
+          <span class="nav-text">Text & Spell Studio</span>
+          <span class="nav-tag">DP</span>
+        </button>
+        <button class="sidebar-nav-btn" data-page="files">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Presentations & Docs</span>
+          <span class="nav-tag">Files</span>
+        </button>
+        <button class="sidebar-nav-btn" data-page="email">
+          <span class="nav-icon">📧</span>
+          <span class="nav-text">Email Polisher</span>
+        </button>
+        <button class="sidebar-nav-btn" data-page="prompt">
+          <span class="nav-icon">🤖</span>
+          <span class="nav-text">AI Prompt Optimizer</span>
+        </button>
+
+        <div class="sidebar-nav-heading">Lab & Diagnostics</div>
+        <button class="sidebar-nav-btn" data-page="matrix">
+          <span class="nav-icon">🔬</span>
+          <span class="nav-text">DP Matrix Lab</span>
+          <span class="nav-tag">2D</span>
+        </button>
+        <button class="sidebar-nav-btn" data-page="history">
+          <span class="nav-icon">⏱️</span>
+          <span class="nav-text">Audit History & Logs</span>
+          <span class="nav-count-badge" id="historyCountBadge">0</span>
+        </button>
+
+        <div class="sidebar-nav-heading">Workspace & System</div>
+        <button class="sidebar-nav-btn" data-page="theme">
+          <span class="nav-icon">🎨</span>
+          <span class="nav-text">Theme & Color Studio</span>
+          <span class="nav-theme-chip" id="sidebarThemeTag">CYBER</span>
+        </button>
+        <button class="sidebar-nav-btn" data-page="profile">
+          <span class="nav-icon">👤</span>
+          <span class="nav-text">Profile & Identity</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer: User Profile Card -->
+      <div class="sidebar-profile-card" id="sidebarProfileCard" title="Click to edit profile details">
+        <div class="profile-avatar-box" id="sidebarAvatarDisplay">🧑‍💻</div>
+        <div class="profile-info-box">
+          <div class="profile-name-text" id="sidebarNameDisplay">Alex Mercer</div>
+          <div class="profile-role-text" id="sidebarRoleDisplay">Lead NLP Engineer</div>
+        </div>
+        <div class="profile-arrow">⚙️</div>
+      </div>
+    </aside>
+
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- MAIN VIEWPORT CONTENT -->
+    <div class="app-main-viewport">
+
+      <!-- Top Header Bar -->
+      <header class="main-topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn" title="Toggle Navigation Menu">
+            <span>☰</span>
+          </button>
+          <div class="breadcrumb-trail">
+            <span class="breadcrumb-root" id="breadcrumbRoot">FixFlow</span>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-active" id="breadcrumbActive">Text & Spell Studio</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn-small-new-conv" id="topbarNewConvBtn" title="Start new conversation / session (Ctrl+N)">
+            <span class="btn-icon-plus">＋</span>
+            <span>New Conversation</span>
+          </button>
+          <button class="btn-tool-palette" id="openColorStudioBtn" title="Open World Color & Theme Studio">
+            <span>🎨</span>
+            <span>Palette Tool</span>
+            <span class="current-theme-pill" id="currentThemeTag">CYBER</span>
+          </button>
+          <button class="btn-ghost" id="openMatrixBtn" title="Open Levenshtein Matrix Explorer">
+            <span>🔬</span> DP Matrix Explorer
+          </button>
+          <a href="/docs" target="_blank" class="btn-ghost" title="Open Swagger API Docs">
+            <span>📡</span> API Docs
+          </a>
+        </div>
+      </header>
+
+      <!-- Scrollable Workspace Container -->
+      <main class="app-content-scroll">
+
+        <!-- Global Controls Bar (Engine strategy, tone profile, max edit distance, top-K) -->
+        <div class="controls-bar" id="globalControlsBar">
+          <div class="control-group">
+            <label class="control-label" for="engineSelect">Linguistic Engine Strategy</label>
+            <select id="engineSelect" class="form-select">
+              <option value="spell">⚡ Smart Spell Check (DP Levenshtein)</option>
+              <option value="grammar">📝 Grammar & Syntax Fix (Rule-Based NLP)</option>
+              <option value="tone">🎨 Tone Polishing (Lexical Transforms)</option>
+            </select>
+          </div>
+
+          <div class="control-group" id="toneProfileGroup">
+            <label class="control-label" for="toneSelect">Tone Voice Profile</label>
+            <select id="toneSelect" class="form-select">
+              <option value="professional">Professional</option>
+              <option value="formal">Formal</option>
+              <option value="casual">Casual</option>
+              <option value="concise">Concise & Direct</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="maxDistRange">Max Edit Distance: <span id="maxDistVal" class="range-value">3</span></label>
+            <div class="range-slider-wrap">
+              <input type="range" id="maxDistRange" class="range-slider" min="1" max="4" value="3">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="topKRange">Top-K Suggestions: <span id="topKVal" class="range-value">3</span></label>
+            <div class="range-slider-wrap">
+              <input type="range" id="topKRange" class="range-slider" min="1" max="5" value="3">
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================================================================
+             PAGE 1: DIRECT TEXT & SPELL STUDIO
+             ================================================================== -->
+        <section class="page-view active" id="page-direct">
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>✍️</span> Freeform Text Correction Studio</div>
+                <div class="panel-caption">Space-optimized Levenshtein dynamic programming, grammar heuristics, and lexical transformations.</div>
+              </div>
+              <div class="preset-pills">
+                <span class="pill-btn" data-preset="spelling">Preset: Spelling Typos</span>
+                <span class="pill-btn" data-preset="grammar">Preset: Grammar Errors</span>
+                <span class="pill-btn" data-preset="tone">Preset: Informal to Professional</span>
+              </div>
+            </div>
+
+            <div class="textarea-wrap">
+              <textarea id="directInputText" class="code-textarea" rows="5" placeholder="Type or paste any text to correct with FixFlow..."></textarea>
+              <div class="textarea-footer">
+                <span id="directCharCount">0 characters • 0 words</span>
+                <span>Dynamic Programming ($O(\min(m, n))$ space complexity)</span>
+              </div>
+            </div>
+
+            <button class="btn-primary" id="runDirectBtn">
+              <span>🚀</span> Run FixFlow Correction
+            </button>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 2: PRESENTATION & DOCUMENT STUDIO
+             ================================================================== -->
+        <section class="page-view" id="page-files">
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>📊</span> Presentation (PPTX) & Document Studio</div>
+                <div class="panel-caption">Upload slide decks or documents to parse, extract, and optimize slide-by-slide or section-by-section.</div>
+              </div>
+            </div>
+
+            <!-- Drag & Drop Zone -->
+            <div class="upload-dropzone" id="fileDropzone">
+              <input type="file" id="fileInput" accept=".pptx,.docx,.pdf,.txt,.md" style="display: none;">
+              <div class="upload-icon">📁</div>
+              <div class="upload-title">Drag & Drop PowerPoint presentations or documents here</div>
+              <div class="upload-hint">or <strong style="color: var(--accent-primary);">click to browse files</strong> from your computer</div>
+              <div class="supported-badges">
+                <span class="file-badge">.PPTX (Slides)</span>
+                <span class="file-badge">.DOCX (Word)</span>
+                <span class="file-badge">.PDF (Docs)</span>
+                <span class="file-badge">.TXT / .MD (Markdown)</span>
+              </div>
+            </div>
+
+            <!-- Loaded File Info Banner -->
+            <div class="file-info-card" id="fileInfoCard">
+              <div class="file-info-left">
+                <div class="file-icon-box" id="fileTypeIcon">📑</div>
+                <div>
+                  <div style="font-weight: 700;" id="fileNameDisplay">document.pptx</div>
+                  <div style="font-size: 0.8rem; color: var(--text-muted);" id="fileMetaDisplay">PowerPoint Deck • 12 Slides</div>
+                </div>
+              </div>
+              <button class="btn-ghost" id="removeFileBtn" style="color: var(--accent-red);">✕ Remove</button>
+            </div>
+
+            <!-- Extracted Text Area -->
+            <div class="textarea-wrap">
+              <label class="control-label" style="margin-bottom: 6px; display: block;">Extracted Document Text (Editable Preview):</label>
+              <textarea id="extractedDocText" class="code-textarea" rows="7" placeholder="Upload a document above or paste slide bullet points here (e.g. • quik brown fox)..."></textarea>
+              <div class="textarea-footer">
+                <span id="docCharCount">0 characters • 0 words</span>
+                <span>Executive Parallel Bullet Formatting</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+              <button class="btn-primary" id="runSlideFixBtn">
+                <span>🚀</span> Polish Slides (Executive Style)
+              </button>
+              <button class="btn-secondary" id="runDocSpellBtn">
+                <span>⚡</span> Run DP Spell Check Only
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 3: EMAIL POLISHER & COMPOSER
+             ================================================================== -->
+        <section class="page-view" id="page-email">
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>📧</span> Professional Email Composer & Polisher</div>
+                <div class="panel-caption">Craft, correct, and polish corporate correspondence with verified DP spelling, grammar, and tone calibration.</div>
+              </div>
+              <div class="preset-pills">
+                <span class="pill-btn" data-email-preset="status">Preset: Milestone Update</span>
+                <span class="pill-btn" data-email-preset="meeting">Preset: Meeting Sync</span>
+                <span class="pill-btn" data-email-preset="followup">Preset: Follow-up</span>
+              </div>
+            </div>
+
+            <div class="email-grid">
+              <div class="control-group">
+                <label class="control-label" for="emailSubject">Subject Line</label>
+                <input type="text" id="emailSubject" class="form-input" placeholder="e.g. Project milestone update and next steps">
+              </div>
+              <div class="control-group">
+                <label class="control-label" for="emailSalutation">Salutation / Greeting</label>
+                <input type="text" id="emailSalutation" class="form-input" value="Hi Team," placeholder="e.g. Hi Team,">
+              </div>
+            </div>
+
+            <div class="textarea-wrap">
+              <label class="control-label" style="margin-bottom: 6px; display: block;">Email Body Content</label>
+              <textarea id="emailBody" class="code-textarea" rows="6" placeholder="Write or paste your email body draft here..."></textarea>
+            </div>
+
+            <div class="control-group" style="margin-bottom: 20px;">
+              <label class="control-label" for="emailSignoff">Sign-off / Signature</label>
+              <input type="text" id="emailSignoff" class="form-input" value="Best regards," placeholder="e.g. Best regards,">
+            </div>
+
+            <button class="btn-primary" id="runEmailBtn">
+              <span>🚀</span> Polish & Correct Entire Email
+            </button>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 4: AI PROMPT OPTIMIZER
+             ================================================================== -->
+        <section class="page-view" id="page-prompt">
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>🤖</span> AI Prompt Optimizer & System Architect</div>
+                <div class="panel-caption">Transform informal, typo-ridden or ambiguous user prompts into production-grade LLM system instructions.</div>
+              </div>
+              <div class="preset-pills">
+                <span class="pill-btn" data-prompt-preset="code">Preset: Code Generation</span>
+                <span class="pill-btn" data-prompt-preset="bug">Preset: Bug Fix Request</span>
+                <span class="pill-btn" data-prompt-preset="summary">Preset: Paper Summary</span>
+              </div>
+            </div>
+
+            <div class="control-group" style="margin-bottom: 16px;">
+              <label class="control-label" for="targetAiSelect">Target AI Model Architecture</label>
+              <select id="targetAiSelect" class="form-select">
+                <option value="Gemini 2.5 Flash / Pro">Google Gemini 2.5 Flash / Pro</option>
+                <option value="Claude 3.7 Sonnet">Anthropic Claude 3.7 Sonnet</option>
+                <option value="ChatGPT (GPT-4o)">OpenAI ChatGPT (GPT-4o)</option>
+                <option value="Universal LLM">Universal Multi-Agent LLM</option>
+              </select>
+            </div>
+
+            <div class="textarea-wrap">
+              <label class="control-label" style="margin-bottom: 6px; display: block;">Raw Prompt Idea</label>
+              <textarea id="rawPromptInput" class="code-textarea" rows="5" placeholder="Enter your raw prompt idea (e.g. write a python script to calculate levenshtein distance with dynamic programing)..."></textarea>
+            </div>
+
+            <button class="btn-primary" id="runPromptBtn">
+              <span>🚀</span> Optimize Prompt for AI Model
+            </button>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             COMMON RESULTS & DIFF SECTION (Appears across text/file/email/prompt)
+             ================================================================== -->
+        <section class="results-container" id="resultsSection">
+          <div class="main-card" style="border-color: var(--border-strong);">
+            <div class="panel-header">
+              <div class="panel-title"><span>📊</span> Correction Results & Visual Diff</div>
+              <div class="action-buttons-row">
+                <button class="btn-ghost" id="copyResultBtn">
+                  <span>📋</span> Copy Output
+                </button>
+                <button class="btn-ghost" id="downloadResultBtn">
+                  <span>💾</span> Download .txt
+                </button>
+              </div>
+            </div>
+
+            <!-- Execution Metrics Row -->
+            <div class="metrics-row">
+              <div class="metric-box">
+                <div class="metric-number" id="metricLatency">0.0ms</div>
+                <div class="metric-label">Execution Latency</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-number" id="metricEdits" style="color: var(--accent-purple);">0</div>
+                <div class="metric-label">Total Edits</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-number" id="metricDistance" style="color: var(--accent-pink);">0</div>
+                <div class="metric-label">Levenshtein Distance</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-number" id="metricWords" style="color: var(--accent-green);">0 → 0</div>
+                <div class="metric-label">Word Count</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-number" style="color: var(--accent-primary);">100%</div>
+                <div class="metric-label">DP Convergence</div>
+              </div>
+            </div>
+
+            <!-- Visual Diff Highlighting (LCS Backtracking) -->
+            <div style="margin-bottom: 12px; font-weight: 700; font-size: 0.88rem; color: var(--text-dim); text-transform: uppercase;">
+              🔍 Visual Diff (Longest Common Subsequence DP Matrix)
+            </div>
+            <div class="diff-view-card" id="diffVisualView">
+              <!-- Dynamically populated -->
+            </div>
+
+            <!-- Side-by-Side Original vs Corrected -->
+            <div class="side-by-side-grid">
+              <div class="text-box-card">
+                <div class="card-header-bar">
+                  <span class="card-header-title">Original Input</span>
+                  <span style="font-size: 0.75rem; color: var(--text-dim);" id="origCharCount">0 chars</span>
+                </div>
+                <div id="originalTextDisplay" style="color: var(--text-muted);"></div>
+              </div>
+
+              <div class="text-box-card" style="border-color: var(--border-focus);">
+                <div class="card-header-bar">
+                  <span class="card-header-title" style="color: var(--accent-primary);">Polished & Corrected Output</span>
+                  <span style="font-size: 0.75rem; color: var(--text-dim);" id="corrCharCount">0 chars</span>
+                </div>
+                <div id="correctedTextDisplay" style="color: var(--accent-primary); font-weight: 500;"></div>
+              </div>
+            </div>
+
+            <!-- Detailed Changes Breakdown -->
+            <div id="changesLogSection">
+              <div style="margin-bottom: 10px; font-weight: 700; font-size: 0.85rem; color: var(--text-dim); text-transform: uppercase;">
+                📋 Detailed Linguistic Transformations Log (<span id="changesCount">0</span>)
+              </div>
+              <div class="changes-list" id="changesListContainer">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 5: DP MATRIX LAB (Full Page Interactive Explorer)
+             ================================================================== -->
+        <section class="page-view" id="page-matrix">
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>🔬</span> Dynamic Programming 2D Matrix Laboratory</div>
+                <div class="panel-caption">Inspect algorithm transitions: $DP[i][j] = \min(DP[i-1][j]+1, DP[i][j-1]+1, DP[i-1][j-1] + \text{cost})$ with optimal path tracing.</div>
+              </div>
+              <div class="preset-pills">
+                <span class="pill-btn matrix-preset-chip" data-w1="kitten" data-w2="sitting">kitten → sitting</span>
+                <span class="pill-btn matrix-preset-chip" data-w1="intention" data-w2="execution">intention → execution</span>
+                <span class="pill-btn matrix-preset-chip" data-w1="algorithm" data-w2="logarithmic">algorithm → logarithmic</span>
+                <span class="pill-btn matrix-preset-chip" data-w1="sunday" data-w2="saturday">sunday → saturday</span>
+              </div>
+            </div>
+
+            <div class="matrix-inputs-row">
+              <div class="control-group">
+                <label class="control-label" for="labMatrixWord1">Word 1 (Source)</label>
+                <input type="text" id="labMatrixWord1" class="form-input" value="kitten">
+              </div>
+              <div class="control-group">
+                <label class="control-label" for="labMatrixWord2">Word 2 (Target)</label>
+                <input type="text" id="labMatrixWord2" class="form-input" value="sitting">
+              </div>
+              <div style="display: flex; align-items: flex-end;">
+                <button class="btn-primary" id="labComputeMatrixBtn" style="padding: 11px 24px;">Compute Transition Grid</button>
+              </div>
+            </div>
+
+            <div class="matrix-table-wrap">
+              <table class="matrix-table" id="labDpMatrixTable">
+                <!-- Populated dynamically -->
+              </table>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 18px;">
+              <div style="background: var(--bg-input); padding: 14px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 0.88rem; color: var(--text-muted);">
+                <strong style="color: var(--accent-green);">Optimal Alignment Legend:</strong>
+                <div style="margin-top: 6px; display: flex; gap: 16px; flex-wrap: wrap;">
+                  <span>🔵 <strong>Blue Cells:</strong> Optimal Backtracking Path</span>
+                  <span>🟢 <strong>Green Cell:</strong> Final Edit Distance</span>
+                  <span>⚪ <strong>Grey Cells:</strong> Search Subproblems</span>
+                </div>
+              </div>
+              <div style="background: var(--bg-input); padding: 14px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); font-size: 0.82rem; color: var(--text-dim);">
+                <div><strong>Complexity:</strong> Time $O(m \times n)$</div>
+                <div style="margin-top: 4px;"><strong>Space in Engine:</strong> Space-optimized to $O(\min(m, n))$</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 6: AUDIT HISTORY & ACTIVITY LOGS
+             ================================================================== -->
+        <section class="page-view" id="page-history">
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>⏱️</span> Audit History & Linguistic Logs</div>
+                <div class="panel-caption">Comprehensive chronological audit trail of all corrections, transformations, and diff metrics.</div>
+              </div>
+              <button class="btn-secondary" id="clearHistoryBtn" style="color: var(--accent-red); font-size: 0.85rem; padding: 6px 14px;">
+                🗑️ Clear History
+              </button>
+            </div>
+
+            <div class="history-list-cards" id="historyListContainer">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 7: THEME & COLOR STUDIO (Dedicated Full Page)
+             ================================================================== -->
+        <section class="page-view" id="page-theme">
+
+          <!-- Quick World Tool Palette Bar (Preserved in Theme & Color Studio) -->
+          <div class="theme-quick-bar" id="themeQuickBar">
+            <div class="theme-bar-label">
+              <span>🎨</span>
+              <span>World Tool Palette:</span>
+            </div>
+            <div class="theme-chips-list" id="themeChipsList">
+              <button class="theme-chip active" data-theme="cyber" title="Cyber Tool (Neon Cyan & Violet)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #00F0FF, #8B5CF6);"></span>
+                <span>Cyber Tool</span>
+              </button>
+              <button class="theme-chip" data-theme="matrix" title="Quantum Matrix (Terminal Emerald & Mint)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #00FF88, #10B981);"></span>
+                <span>Quantum Matrix</span>
+              </button>
+              <button class="theme-chip" data-theme="linear" title="Linear Obsidian (Electric Indigo & Violet)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #6366F1, #A855F7);"></span>
+                <span>Linear Obsidian</span>
+              </button>
+              <button class="theme-chip" data-theme="amber" title="Solar Amber (Aerospace Gold & Flame)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #FFB800, #F97316);"></span>
+                <span>Solar Amber</span>
+              </button>
+              <button class="theme-chip" data-theme="synthwave" title="Synthwave (Hot Magenta & Laser Azure)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #FF007F, #00F5D4);"></span>
+                <span>Synthwave</span>
+              </button>
+              <button class="theme-chip" data-theme="tokyo" title="Tokyo Ice (Arctic Sapphire & Frost Cyan)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #38BDF8, #2563EB);"></span>
+                <span>Tokyo Ice</span>
+              </button>
+              <button class="theme-chip" data-theme="blueprint" title="CAD Blueprint (Precision Light Tool)">
+                <span class="theme-dot" style="background: linear-gradient(135deg, #1D4ED8, #0284C7);"></span>
+                <span>CAD Blueprint</span>
+              </button>
+            </div>
+            <button class="theme-customize-btn" id="openColorStudioModalBtn" title="Open Advanced Color Studio & Live Hex Tuner">
+              <span>🎛️</span> Customize Palette
+            </button>
+          </div>
+
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>🎨</span> World Color & Spectrum Studio</div>
+                <div class="panel-caption">Calibrate visual wavelengths, high-voltage cyber glows, and precision engineering palettes across FixFlow.</div>
+              </div>
+            </div>
+
+            <div class="modal-section-title">
+              <span>⚡</span> Curated Real-World Tool Palettes
+            </div>
+            <div class="theme-presets-grid" id="fullPageThemePresetsGrid">
+              <!-- Injected dynamically -->
+            </div>
+
+            <!-- Custom Frequency & Accent Tuner -->
+            <div class="modal-section-title" style="margin-top: 24px;">
+              <span>🎛️</span> Custom Frequency & Laser Accent Tuner
+            </div>
+            <div class="color-tuner-card">
+              <div class="tuner-row">
+                <div class="tuner-field">
+                  <label class="control-label" for="pageCustomPrimaryInput">Primary Laser Accent</label>
+                  <div class="color-picker-input-wrap">
+                    <input type="color" id="pageCustomPrimaryInput" value="#00F0FF" class="color-swatch-picker">
+                    <input type="text" id="pageCustomPrimaryHex" value="#00F0FF" class="form-input" maxlength="7" style="font-family: var(--font-mono); font-weight: 600;">
+                  </div>
+                </div>
+                <div class="tuner-field">
+                  <label class="control-label" for="pageCustomSecondaryInput">Secondary Radiant Accent</label>
+                  <div class="color-picker-input-wrap">
+                    <input type="color" id="pageCustomSecondaryInput" value="#8B5CF6" class="color-swatch-picker">
+                    <input type="text" id="pageCustomSecondaryHex" value="#8B5CF6" class="form-input" maxlength="7" style="font-family: var(--font-mono); font-weight: 600;">
+                  </div>
+                </div>
+              </div>
+
+              <div class="tuner-row" style="margin-top: 16px;">
+                <div class="tuner-field">
+                  <label class="control-label" for="pageGlowIntensityRange">
+                    Cyber Glow Intensity: <span id="pageGlowIntensityVal" class="range-value">High Tech</span>
+                  </label>
+                  <div class="range-slider-wrap">
+                    <input type="range" id="pageGlowIntensityRange" class="range-slider" min="0" max="3" value="2">
+                  </div>
+                </div>
+                <div class="tuner-field">
+                  <label class="control-label">Workspace Background Mesh</label>
+                  <div class="toggle-switch-wrap">
+                    <button class="btn-toggle active" id="pageToggleGridBtn">
+                      <span class="toggle-dot"></span>
+                      <span id="pageGridToggleLabel">Grid Matrix: Active</span>
+                    </button>
+                    <button class="btn-secondary" id="pageResetThemeBtn" style="padding: 7px 14px; font-size: 0.82rem;">
+                      ↺ Reset Default
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live Simulation Strip -->
+              <div class="live-preview-box">
+                <div class="live-preview-label">Live Surface & Accent Simulation</div>
+                <div class="preview-elements-strip">
+                  <button class="btn-preview-primary">Primary Action</button>
+                  <span class="preview-badge-accent">Active DP Engine</span>
+                  <span class="diff-ins">+ inserted token</span>
+                  <span class="diff-del">- deleted typo</span>
+                  <span class="preview-metric-chip">100% Convergence</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PAGE 8: PROFILE & IDENTITY SYSTEM
+             ================================================================== -->
+        <section class="page-view" id="page-profile">
+          <!-- Profile Header Banner -->
+          <div class="profile-banner-card">
+            <div class="profile-banner-left">
+              <div class="profile-large-avatar" id="profileHeaderAvatar">🧑‍💻</div>
+              <div class="profile-banner-details">
+                <h2>
+                  <span id="profileHeaderName">Alex Mercer</span>
+                  <span class="verified-pill">VERIFIED PRO</span>
+                </h2>
+                <p id="profileHeaderRole">Lead NLP & Dynamic Programming Systems Architect</p>
+                <div style="font-size: 0.82rem; color: var(--text-dim); margin-top: 4px;" id="profileHeaderOrg">
+                  🏛️ FixFlow Research Lab • Tokyo & Silicon Valley
+                </div>
+              </div>
+            </div>
+            <div class="profile-stats-strip">
+              <div class="profile-stat-box">
+                <div class="profile-stat-val" id="profileStatRuns">0</div>
+                <div class="profile-stat-lbl">Corrections Run</div>
+              </div>
+              <div class="profile-stat-box">
+                <div class="profile-stat-val" id="profileStatTheme">CYBER</div>
+                <div class="profile-stat-lbl">Active Palette</div>
+              </div>
+              <div class="profile-stat-box">
+                <div class="profile-stat-val" style="color: var(--accent-green);">ONLINE</div>
+                <div class="profile-stat-lbl">Engine Health</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Details Editor Card -->
+          <div class="main-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title"><span>👤</span> Edit Profile & System Identity</div>
+                <div class="panel-caption">Customize your developer persona, external model API credentials, and default linguistic preferences.</div>
+              </div>
+            </div>
+
+            <!-- Avatar Selector -->
+            <div class="control-group" style="margin-bottom: 20px;">
+              <label class="control-label">Select Identity Avatar</label>
+              <div class="avatar-selection-wrap">
+                <button class="avatar-choice-btn active" data-avatar="🧑‍💻">🧑‍💻</button>
+                <button class="avatar-choice-btn" data-avatar="👩‍🔬">👩‍🔬</button>
+                <button class="avatar-choice-btn" data-avatar="⚡">⚡</button>
+                <button class="avatar-choice-btn" data-avatar="🤖">🤖</button>
+                <button class="avatar-choice-btn" data-avatar="🚀">🚀</button>
+                <button class="avatar-choice-btn" data-avatar="🛡️">🛡️</button>
+                <button class="avatar-choice-btn" data-avatar="🐱">🐱</button>
+                <button class="avatar-choice-btn" data-avatar="🦊">🦊</button>
+                <input type="text" id="customAvatarInput" class="form-input custom-avatar-input" maxlength="2" placeholder="Custom" title="Type custom emoji or letters">
+              </div>
+            </div>
+
+            <!-- Profile Form Grid -->
+            <div class="profile-form-grid">
+              <div class="control-group">
+                <label class="control-label" for="profileNameInput">Full Display Name</label>
+                <input type="text" id="profileNameInput" class="form-input" value="Alex Mercer" placeholder="e.g. Alex Mercer">
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="profileRoleInput">Professional Title / Role</label>
+                <input type="text" id="profileRoleInput" class="form-input" value="Lead NLP Engineer" placeholder="e.g. Lead NLP Engineer">
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="profileOrgInput">Organization / Team</label>
+                <input type="text" id="profileOrgInput" class="form-input" value="FixFlow Research Lab" placeholder="e.g. OpenAI / DeepMind / Personal Studio">
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="profileEmailInput">Contact Email</label>
+                <input type="email" id="profileEmailInput" class="form-input" value="alex.mercer@fixflow.ai" placeholder="e.g. user@domain.com">
+              </div>
+
+              <div class="control-group" style="grid-column: 1 / -1;">
+                <label class="control-label" for="profileBioInput">Bio / Personal Mission</label>
+                <textarea id="profileBioInput" class="code-textarea" rows="3" placeholder="A brief sentence describing your linguistic research or prompt engineering focus...">Building zero-hallucination NLP pipelines and Dynamic Programming algorithms for mission-critical enterprise workflows.</textarea>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="profileApiKeyInput">Custom LLM API Token (Optional)</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                  <input type="password" id="profileApiKeyInput" class="form-input" value="sk-fixflow-dp-live-v2-preview" style="padding-right: 42px;">
+                  <button type="button" id="toggleApiKeyVisibility" class="btn-ghost" style="position: absolute; right: 4px; padding: 4px 8px; font-size: 0.8rem; border: none;">👁️</button>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="profileDefaultEngine">Default Correction Strategy</label>
+                <select id="profileDefaultEngine" class="form-select">
+                  <option value="spell">⚡ Smart Spell Check (DP Levenshtein)</option>
+                  <option value="grammar">📝 Grammar & Syntax Fix (Rule-Based NLP)</option>
+                  <option value="tone">🎨 Tone Polishing (Lexical Transforms)</option>
+                </select>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label" for="profileDefaultTone">Default Tone Voice</label>
+                <select id="profileDefaultTone" class="form-select">
+                  <option value="professional">Professional</option>
+                  <option value="formal">Formal</option>
+                  <option value="casual">Casual</option>
+                  <option value="concise">Concise & Direct</option>
+                </select>
+              </div>
+
+              <div class="control-group">
+                <label class="control-label">Workspace Audio & Telemetry</label>
+                <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
+                  <button class="btn-toggle active" id="profileSoundToggle">
+                    <span class="toggle-dot"></span>
+                    <span id="profileSoundLabel">Audio Haptics: ON</span>
+                  </button>
+                  <button class="btn-toggle active" id="profileAutoSaveToggle">
+                    <span class="toggle-dot"></span>
+                    <span id="profileAutoSaveLabel">Auto-Save History: ON</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Profile Actions -->
+            <div class="profile-action-bar">
+              <button class="btn-secondary" id="exportProfileBtn">
+                <span>📤</span> Export JSON
+              </button>
+              <button class="btn-secondary" id="resetProfileBtn" style="color: var(--accent-red);">
+                <span>↺</span> Reset Defaults
+              </button>
+              <button class="btn-primary" id="saveProfileBtn" style="width: auto; padding: 12px 28px;">
+                <span>💾</span> Save Profile Changes
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       MODAL 1: World Color & Palette Studio Tool (Quick Modal Version)
+       ====================================================================== -->
+  <div class="modal-overlay" id="colorStudioModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <div class="modal-badge-tag">ENVIRONMENT & SPECTRUM ENGINE</div>
+          <h2 style="font-size: 1.45rem; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+            <span>🎨</span> World Color & Theme Studio
+          </h2>
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin-top: 4px;">
+            Calibrate visual wavelengths, cyber glows, and precision palettes across the FixFlow workspace.
+          </p>
+        </div>
+        <button class="close-btn" id="closeColorStudioBtn">✕</button>
+      </div>
+
+      <div class="modal-section-title">
+        <span>⚡</span> Presets Inspired by Real-World Developer Tools
+      </div>
+      <div class="theme-presets-grid" id="themePresetsGrid">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="modal-section-title" style="margin-top: 24px;">
+        <span>🎛️</span> Custom Frequency & Accent Tuner
+      </div>
+      <div class="color-tuner-card">
+        <div class="tuner-row">
+          <div class="tuner-field">
+            <label class="control-label" for="customPrimaryInput">Primary Laser Accent</label>
+            <div class="color-picker-input-wrap">
+              <input type="color" id="customPrimaryInput" value="#00F0FF" class="color-swatch-picker">
+              <input type="text" id="customPrimaryHex" value="#00F0FF" class="form-input" maxlength="7" style="font-family: var(--font-mono); font-weight: 600;">
+            </div>
+          </div>
+          <div class="tuner-field">
+            <label class="control-label" for="customSecondaryInput">Secondary Radiant Accent</label>
+            <div class="color-picker-input-wrap">
+              <input type="color" id="customSecondaryInput" value="#8B5CF6" class="color-swatch-picker">
+              <input type="text" id="customSecondaryHex" value="#8B5CF6" class="form-input" maxlength="7" style="font-family: var(--font-mono); font-weight: 600;">
+            </div>
+          </div>
+        </div>
+
+        <div class="tuner-row" style="margin-top: 16px;">
+          <div class="tuner-field">
+            <label class="control-label" for="glowIntensityRange">
+              Cyber Glow Intensity: <span id="glowIntensityVal" class="range-value">High Tech</span>
+            </label>
+            <div class="range-slider-wrap">
+              <input type="range" id="glowIntensityRange" class="range-slider" min="0" max="3" value="2">
+            </div>
+          </div>
+          <div class="tuner-field">
+            <label class="control-label">Workspace Background Mesh</label>
+            <div class="toggle-switch-wrap">
+              <button class="btn-toggle active" id="toggleGridBtn">
+                <span class="toggle-dot"></span>
+                <span id="gridToggleLabel">Grid Matrix: Active</span>
+              </button>
+              <button class="btn-secondary" id="resetThemeBtn" style="padding: 7px 14px; font-size: 0.82rem;">
+                ↺ Reset Default
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="live-preview-box">
+          <div class="live-preview-label">Live Surface & Accent Simulation</div>
+          <div class="preview-elements-strip">
+            <button class="btn-preview-primary">Primary Action</button>
+            <span class="preview-badge-accent">Active DP Engine</span>
+            <span class="diff-ins">+ inserted token</span>
+            <span class="diff-del">- deleted typo</span>
+            <span class="preview-metric-chip">100% Convergence</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       MODAL 2: Interactive 2D Levenshtein Matrix Explorer
+       ====================================================================== -->
+  <div class="modal-overlay" id="matrixModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-size: 1.4rem; font-weight: 800;">🔬 Dynamic Programming Levenshtein Matrix</h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
+            Inspect state transitions: $DP[i][j] = \min(DP[i-1][j]+1, DP[i][j-1]+1, DP[i-1][j-1] + \text{cost})$
+          </p>
+        </div>
+        <button class="close-btn" id="closeMatrixBtn">✕</button>
+      </div>
+
+      <div class="matrix-inputs-row">
+        <div class="control-group">
+          <label class="control-label" for="matrixWord1">Word 1 (Source)</label>
+          <input type="text" id="matrixWord1" class="form-input" value="kitten">
+        </div>
+        <div class="control-group">
+          <label class="control-label" for="matrixWord2">Word 2 (Target)</label>
+          <input type="text" id="matrixWord2" class="form-input" value="sitting">
+        </div>
+        <div style="display: flex; align-items: flex-end;">
+          <button class="btn-primary" id="computeMatrixBtn" style="padding: 10px 20px;">Compute Grid</button>
+        </div>
+      </div>
+
+      <div class="matrix-table-wrap">
+        <table class="matrix-table" id="dpMatrixTable">
+          <!-- Populated by app.js -->
+        </table>
+      </div>
+
+      <div style="background: rgba(30, 41, 59, 0.5); padding: 12px 16px; border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text-muted);">
+        <strong style="color: var(--accent-green);">Legend:</strong>
+        <span style="margin-left: 8px;">🔵 Blue cells show optimal DP alignment path</span>
+        <span style="margin-left: 12px;">🟢 Green cell is final Levenshtein Distance</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-notice" id="toastNotice">✅ Copied to clipboard!</div>
+
+  <script src="app.js"></script>
+</body>
+</html>

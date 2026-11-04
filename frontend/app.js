@@ -9,7 +9,7 @@ let isBackendOnline = false;
 // ============================================================================
 // 1. DOM Elements & State
 // ============================================================================
-const serverStatusBadge = document.getElementById("serverStatusBadge");
+const serverStatusBadge = document.getElementById("sidebarStatusPill") || document.getElementById("serverStatusBadge");
 const statusDot = document.getElementById("statusDot");
 const statusText = document.getElementById("statusText");
 
@@ -49,17 +49,17 @@ async function checkBackendHealth() {
     if (res.ok) {
       const data = await res.json();
       isBackendOnline = true;
-      statusDot.className = "status-dot";
-      statusText.textContent = `API Online (${data.version || "v2.0"})`;
-      serverStatusBadge.style.borderColor = "rgba(16, 185, 129, 0.4)";
+      if (statusDot) statusDot.className = "status-dot";
+      if (statusText) statusText.textContent = `API Online (${data.version || "v2.0"})`;
+      if (serverStatusBadge) serverStatusBadge.style.borderColor = "rgba(16, 185, 129, 0.4)";
     } else {
       throw new Error("Status code " + res.status);
     }
   } catch (err) {
     isBackendOnline = false;
-    statusDot.className = "status-dot offline";
-    statusText.textContent = "Offline Mode (Client DP)";
-    serverStatusBadge.style.borderColor = "rgba(245, 158, 11, 0.4)";
+    if (statusDot) statusDot.className = "status-dot offline";
+    if (statusText) statusText.textContent = "Offline Mode (Client DP)";
+    if (serverStatusBadge) serverStatusBadge.style.borderColor = "rgba(245, 158, 11, 0.4)";
   }
 }
 
@@ -776,7 +776,8 @@ const CLIENT_CONTRACTIONS = {
 const CLIENT_SPELL_MAP = {
   quik: "quick", ovr: "over", lazi: "lazy", dynmic: "dynamic", progranning: "programming",
   progran: "program", recieve: "receive", definately: "definitely", seperate: "separate",
-  neccessary: "necessary", inteligence: "intelligence", artifical: "artificial"
+  neccessary: "necessary", inteligence: "intelligence", artifical: "artificial",
+  opttimistic: "optimistic", optomistic: "optimistic", awarness: "awareness"
 };
 
 function clientSpell(text) {

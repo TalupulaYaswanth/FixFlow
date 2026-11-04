@@ -109,6 +109,63 @@ DEFAULT_VOCABULARY: Dict[str, int] = {
     "presentation": 70000, "presentations": 65000, "document": 75000, "documents": 72000,
     "optimizer": 55000, "optimization": 60000, "structured": 62000, "guidelines": 58000,
     "persona": 50000, "effective": 78000, "acquire": 65000, "objective": 70000,
+
+    # Common Proper Names & Nouns
+    "ram": 65000, "shyam": 55000, "sita": 45000, "gita": 45000, "krishna": 50000,
+    "john": 85000, "alex": 75000, "sam": 70000, "david": 80000, "mary": 75000,
+    "michael": 80000, "james": 82000, "robert": 78000, "william": 79000, "smith": 85000,
+    "peter": 72000, "paul": 74000, "emma": 71000, "olivia": 70000, "daniel": 75000,
+    "sarah": 73000, "mark": 76000, "kevin": 71000, "brian": 72000, "chris": 74000,
+    "tom": 68000, "jack": 72000,
+
+    # Cognitive, Psychological, Emotional, and Philosophical
+    "optimistic": 68000, "optimism": 64000, "optimist": 58000, "optimistically": 52000,
+    "pessimistic": 55000, "pessimism": 52000, "pessimist": 48000,
+    "awareness": 75000, "aware": 80000, "unaware": 55000, "self": 110000,
+    "conscious": 68000, "consciousness": 65000, "subconscious": 52000,
+    "mindful": 58000, "mindfulness": 62000, "attitude": 74000, "attitudes": 68000,
+    "behavior": 78000, "behaviors": 70000, "perspective": 76000, "perspectives": 72000,
+    "positive": 88000, "negative": 85000, "hope": 92000, "hopeful": 65000, "hopeless": 52000,
+    "confident": 75000, "confidence": 80000, "thought": 95000, "thoughts": 90000,
+    "emotion": 76000, "emotions": 78000, "emotional": 79000, "feeling": 85000, "feelings": 88000,
+    "mental": 82000, "psychology": 72000, "psychological": 70000, "perception": 71000,
+    "insight": 72000, "insights": 70000, "clarity": 68000, "motivation": 75000, "motivated": 70000,
+    "belief": 80000, "beliefs": 78000, "value": 90000, "values": 92000, "purpose": 85000,
+    "goal": 88000, "goals": 90000, "action": 95000, "actions": 92000, "habit": 70000, "habits": 74000,
+    "decision": 84000, "decisions": 82000, "focus": 90000, "focused": 85000, "clarify": 60000,
+    "understanding": 88000, "understand": 92000, "knowledge": 95000,
+    "wisdom": 75000, "intelligent": 78000, "smart": 82000,
+
+    # Extensive Everyday Vocabulary (Nouns, Verbs, Adjectives, Adverbs)
+    "person": 98000, "human": 95000, "individual": 88000, "society": 85000,
+    "friend": 92000, "friends": 95000, "team": 95000, "colleague": 68000,
+    "leader": 82000, "leadership": 85000, "manager": 86000, "director": 84000,
+    "organization": 92000, "solution": 92000, "solutions": 95000,
+    "problem": 98000, "problems": 96000, "issue": 90000, "issues": 92000,
+    "challenge": 84000, "challenges": 86000, "strategy": 88000,
+    "success": 92000, "successful": 88000, "failure": 78000, "mistake": 75000, "mistakes": 76000,
+    "opportunity": 90000, "opportunities": 92000, "growth": 89000,
+    "progress": 86000, "improvement": 84000, "performance": 92000,
+    "experience": 96000, "practice": 88000, "skill": 85000, "skills": 90000,
+    "talent": 75000, "training": 88000, "course": 89000, "study": 92000,
+    "science": 90000, "engineering": 86000, "hardware": 82000, "model": 94000,
+    "create": 92000, "build": 90000, "develop": 92000, "implement": 85000,
+    "manage": 88000, "maintain": 82000, "scale": 80000,
+    "communication": 88000, "letter": 80000, "meeting": 88000,
+    "discussion": 85000, "conversation": 84000, "feedback": 86000,
+    "important": 98000, "essential": 82000, "critical": 84000, "urgent": 75000,
+    "complex": 84000, "easy": 90000, "difficult": 84000, "clear": 92000,
+    "better": 98000, "fine": 85000, "fast": 88000, "slow": 80000,
+    "low": 85000, "strong": 88000, "weak": 78000, "happy": 90000,
+    "glad": 75000, "excited": 78000, "grateful": 72000, "kind": 88000,
+    "honest": 78000, "helpful": 80000, "friendly": 82000, "calm": 75000,
+    "always": 96000, "never": 94000, "often": 88000, "sometimes": 86000,
+    "usually": 85000, "really": 95000, "truly": 80000, "certainly": 78000,
+    "probably": 84000, "perhaps": 80000, "maybe": 88000, "together": 90000,
+    "alone": 82000, "soon": 88000, "later": 86000, "morning": 88000,
+    "afternoon": 80000, "evening": 84000, "night": 90000, "week": 92000,
+    "month": 90000, "future": 92000, "present": 88000, "past": 86000,
+    "country": 95000, "nature": 86000, "environment": 88000, "love": 98000,
 }
 
 # Common colloquial contractions missing apostrophes
@@ -384,17 +441,29 @@ class DPCorrector:
                     suggestions = self.get_suggestions(token, k=3, max_distance=3)
                     if suggestions:
                         best_match, best_dist, _ = suggestions[0]
-                        # Pruning guard: for short words (len <= 4), prevent overly aggressive deletions
+                        # Pruning guard: prevent false-positive corrections on names & short words
                         token_len = len(token)
                         cand_len = len(best_match)
                         is_valid_replacement = True
 
-                        if token_len <= 3 and best_dist > 1:
+                        if best_dist > 2:
+                            is_valid_replacement = False
+                        # Never delete characters from short words (e.g. Ram -> Am, Cat -> At)
+                        elif token_len <= 3 and cand_len < token_len:
+                            is_valid_replacement = False
+                        elif token_len <= 3 and best_dist > 1:
                             is_valid_replacement = False
                         elif token_len <= 4 and (best_dist > 1 or cand_len < token_len - 1):
                             is_valid_replacement = False
-                        elif best_dist > 2:
-                            is_valid_replacement = False
+
+                        # Proper noun & Name protection: Capitalized words should not become 2-letter function words
+                        if is_valid_replacement and token[0].isupper():
+                            aux_words = {
+                                "am", "an", "at", "as", "in", "on", "or", "he", "we", "us",
+                                "to", "is", "it", "be", "do", "by", "if", "my", "up", "so", "no"
+                            }
+                            if best_match.lower() in aux_words and clean_lower not in aux_words:
+                                is_valid_replacement = False
 
                         if is_valid_replacement:
                             corrected_tokens.append(best_match)

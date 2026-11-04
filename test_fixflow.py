@@ -46,6 +46,13 @@ class TestDynamicProgrammingModule(unittest.TestCase):
         self.assertTrue(len(suggs) > 0)
         self.assertEqual(suggs[0][0].lower(), "programming")
 
+    def test_proper_nouns_and_vocabulary(self):
+        corrector = DPCorrector()
+        corrected, changes = corrector.correct_text("Ram and shyam are opttimistic about self awareness")
+        self.assertIn("Ram", corrected)
+        self.assertNotIn("Am and", corrected)
+        self.assertIn("optimistic", corrected)
+
 
 class TestNLPModule(unittest.TestCase):
     def setUp(self):

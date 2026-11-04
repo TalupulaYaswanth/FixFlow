@@ -17,6 +17,7 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -332,14 +333,23 @@ async def upload_file_endpoint(
 
 
 # ---------------------------------------------------------------------------
-# Mount Frontend Static Files (FixFlow SPA Studio)
+# Mount Frontend Static Files & SPA Root (FixFlow Web Studio)
 # ---------------------------------------------------------------------------
 frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
+
+@app.get("/", include_in_schema=False)
+async def serve_index():
+    index_path = os.path.join(frontend_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "FixFlow API is active. Explore documentation at /docs"}
+
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
 

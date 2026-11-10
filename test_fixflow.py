@@ -53,6 +53,12 @@ class TestDynamicProgrammingModule(unittest.TestCase):
         self.assertNotIn("Am and", corrected)
         self.assertIn("optimistic", corrected)
 
+    def test_viterbi_context_corrector(self):
+        corrector = DPCorrector()
+        tokens = ["quik", "brown", "fox"]
+        corrected = viterbi_context_corrector(tokens, corrector)
+        self.assertEqual(corrected, ["quick", "brown", "fox"])
+
 
 class TestNLPModule(unittest.TestCase):
     def setUp(self):

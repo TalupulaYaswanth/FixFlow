@@ -32,4 +32,5 @@ jobs:
       - name: Run automated test suite
         run: |
           python test_fixflow.py
+          python test_realworld.py
 

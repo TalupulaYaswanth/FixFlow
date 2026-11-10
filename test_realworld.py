@@ -25,3 +25,4 @@ for category, text, mode in samples:
         rule = c.get("rule", c.get("type", "change"))
         print(f"  - {rule}: {repr(c.get('original'))} -> {repr(c.get('replacement'))}")
     print("=" * 80)
+

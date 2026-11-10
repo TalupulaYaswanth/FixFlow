@@ -70,13 +70,6 @@ class ToneStyle(str, Enum):
     CONCISE = "concise"
 
 
-class PromptType(str, Enum):
-    GENERAL = "general"
-    AI_PROMPT = "ai_prompt"
-    EMAIL = "email"
-    PRESENTATION = "presentation"
-
-
 class CorrectionRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=50000, description="The input text to correct")
     mode: CorrectionMode = Field(default=CorrectionMode.SPELL, description="Correction mode ('spell', 'grammar', 'tone')")

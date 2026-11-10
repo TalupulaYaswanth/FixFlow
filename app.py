@@ -18,7 +18,6 @@ Full-featured Frontend Studio supporting:
 import streamlit as st
 import time
 import pandas as pd
-import io
 
 from dp_corrector import DPCorrector, levenshtein_distance, levenshtein_matrix, lcs_diff
 from nlp_corrector import NLPCorrector

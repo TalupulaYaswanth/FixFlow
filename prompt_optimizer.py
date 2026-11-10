@@ -11,7 +11,7 @@ Specialized optimizers for different text and prompt types:
 """
 
 import re
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Tuple, List
 from dp_corrector import DPCorrector
 from nlp_corrector import NLPCorrector
 
@@ -36,9 +36,6 @@ class PromptOptimizer:
         # Step 2: Fix grammar and syntax using NLP
         grammar_fixed, nlp_changes = self.nlp.fix_grammar(spell_fixed)
         changes.extend(nlp_changes)
-
-        # Step 3: Check if already structured
-        lines = [l.strip() for l in grammar_fixed.split("\n") if l.strip()]
 
         # Generate structured prompt template
         structured_prompt = (

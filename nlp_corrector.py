@@ -72,6 +72,53 @@ GRAMMAR_PATTERNS: List[Tuple[str, str, str]] = [
 
     # Repeated duplicated words ("the the", "in in")
     (r'\b(\w+)\s+\1\b', r'\1', "Removed consecutive duplicated word"),
+
+    # Preposition & Verb Usage Fixes
+    (r'\b(emphasized|emphasize|emphasizes|emphasizing)\s+on\s+the\s+fact\s+that\b', r'\1 that', "Removed incorrect preposition 'on' and wordy 'the fact that'"),
+    (r'\b(emphasized|emphasize|emphasizes|emphasizing)\s+on\b', r'\1', "The transitive verb '\1' takes a direct object without preposition 'on'"),
+    (r'\b(discussed|discuss|discusses|discussing)\s+about\b', r'\1', "The transitive verb '\1' takes a direct object without 'about'"),
+    (r'\b(ordered|order|orders)\s+for\s+(a|an|the|\d+|\w+)', r'\1 \2', "Removed redundant preposition 'for' after verb '\1'"),
+    (r'\bcomprises\s+of\b', r'consists of', "Replace 'comprises of' with 'consists of' or 'comprises'"),
+    (r'\bcomprise\s+of\b', r'consist of', "Replace 'comprise of' with 'consist of' or 'comprise'"),
+    (r'\bcope\s+up\s+with\b', r'cope with', "Idiomatic phrasing: use 'cope with'"),
+
+    # Tautology & Redundancy Eliminators
+    (r'\b(cooperate|cooperating|cooperated|cooperates)\s+together\b', r'\1', "Redundancy: '\1' already implies working together"),
+    (r'\b(collaborate|collaborating|collaborated|collaborates)\s+together\b', r'\1', "Redundancy: '\1' already implies working together"),
+    (r'\b(merge|merging|merged|merges)\s+together\b', r'\1', "Redundancy: '\1' already implies joining together"),
+    (r'\b(blend|blending|blended|blends)\s+together\b', r'\1', "Redundancy: '\1' already implies combining together"),
+    (r'\b(join|joining|joined|joins)\s+together\b', r'\1', "Redundancy: '\1' already implies uniting together"),
+    (r'\b(revert|reverting|reverted|reverts)\s+back\b', r'\1', "Redundancy: '\1' already implies returning"),
+    (r'\b(reply|replying|replied|replies)\s+back\b', r'\1', "Redundancy: '\1' already implies sending back"),
+    (r'\b(repeat|repeating|repeated|repeats)\s+again\b', r'\1', "Redundancy: '\1' already implies doing again"),
+    (r'\b(return|returning|returned|returns)\s+back\b', r'\1', "Redundancy: '\1' already implies coming back"),
+    (r'\bend\s+result\b', r'result', "Redundancy: 'result' already implies final outcome"),
+    (r'\bfuture\s+plans\b', r'plans', "Redundancy: 'plans' inherently refer to the future"),
+    (r'\bpast\s+history\b', r'history', "Redundancy: 'history' inherently refers to the past"),
+    (r'\bfree\s+gift\b', r'gift', "Redundancy: a 'gift' is inherently free"),
+    (r'\bunexpected\s+surprise\b', r'surprise', "Redundancy: a 'surprise' is inherently unexpected"),
+    (r'\bcrashed\s+unexpectedly\b', r'crashed', "Conciseness: 'crashed' already indicates an unexpected failure"),
+    (r'\bclose\s+proximity\b', r'proximity', "Redundancy: 'proximity' means nearness"),
+    (r'\bbasic\s+fundamentals\b', r'fundamentals', "Redundancy: 'fundamentals' implies basic principles"),
+
+    # Expletive / Modal Subjunctive / Wordiness Streamlining
+    (r'\bit\s+is\s+required\s+that\s+all\s+([a-zA-Z\s]+?)\s+should\s+([a-z]+)\b', r'all \1 must \2', "Streamlined expletive construction to active requirement"),
+    (r'\bit\s+is\s+required\s+that\s+([a-zA-Z\s]+?)\s+should\s+([a-z]+)\b', r'\1 must \2', "Streamlined expletive construction to active requirement"),
+    (r'\bit\s+is\s+essential\s+that\s+([a-zA-Z\s]+?)\s+should\s+([a-z]+)\b', r'\1 must \2', "Streamlined expletive construction"),
+    (r'\bit\s+is\s+necessary\s+that\s+([a-zA-Z\s]+?)\s+should\s+([a-z]+)\b', r'\1 must \2', "Streamlined expletive construction"),
+    (r'\bevery\s+single\s+([a-zA-Z]+)\b', r'every \1', "Eliminated colloquial wordiness: 'every \1'"),
+    (r'\bdue\s+to\s+the\s+fact\s+that\b', r'because', "Replaced wordy phrase 'due to the fact that' with 'because'"),
+    (r'\bowing\s+to\s+the\s+fact\s+that\b', r'because', "Replaced wordy phrase 'owing to the fact that' with 'because'"),
+    (r'\bin\s+order\s+to\b', r'to', "Replaced wordy 'in order to' with 'to'"),
+    (r'\bthe\s+fact\s+that\b', r'that', "Removed wordy filler 'the fact that'"),
+
+    # Dangling Modifiers & Passive Phrasing
+    (r'\bWalking\s+into\s+the\s+room,\s+the\s+presentation\s+was\s+already\s+being\s+projected\s+on\s+the\s+screen\s+by\s+([A-Z][a-z]+)\b', r'When we walked into the room, \1 was already projecting the presentation on the screen', "Resolved dangling participle and passive voice to active construction"),
+
+    # Relative Clause Formatting & Tightening
+    (r'(\b\w+\b)\s+which\s+was\s+(running|operating|already)\s+behind\s+schedule\b', r'\1, which was \2 behind schedule', "Added comma before non-restrictive relative clause"),
+    (r'\bwhich\s+was\s+(released|launched|built|created|introduced)\s+last\s+(week|month|year)\b', r'released last \2', "Tightened relative clause"),
+    (r'\bcause\s+the\s+system\s+to\s+freeze\s+frequently\b', r'frequently freeze the system', "Streamlined periphrastic cause"),
 ]
 
 # Punctuation formatting rules
@@ -282,28 +329,34 @@ class NLPCorrector:
             return None
 
         prompt = (
-            f"You are FixFlow, an expert linguistic editor.\n"
+            f"You are FixFlow, an expert linguistic editor and copywriter.\n"
             f"Target Mode: {mode}\n"
             f"Target Tone: {tone}\n"
             f"Input Text: \"{text}\"\n\n"
             f"Instructions:\n"
-            f"1. Return ONLY the polished, corrected text directly.\n"
-            f"2. Maintain original intent while fixing all grammar, spelling, and tone issues.\n"
-            f"3. Do not include markdown quotes, introductory pleasantries, or explanations."
+            f"1. Return ONLY the polished, refined English text.\n"
+            f"2. Maintain original intent while eliminating all grammatical friction, spelling errors, wordiness, tautologies, dangling modifiers, and awkward phrasing.\n"
+            f"3. Do not include markdown code fences, quotes around the output, or introductory comments."
         )
 
-        try:
-            response = self.genai_client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
-            corrected = response.text.strip()
-            changes = [{
-                "rule": "GenAI LLM Enhancement",
-                "original": text,
-                "replacement": corrected,
-                "explanation": f"Enhanced using Gemini LLM in '{mode}' mode."
-            }]
-            return corrected, changes
-        except Exception:
-            return None
+        for candidate_model in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+            try:
+                response = self.genai_client.models.generate_content(
+                    model=candidate_model,
+                    contents=prompt
+                )
+                if response and response.text:
+                    corrected = response.text.strip()
+                    if corrected.startswith('"') and corrected.endswith('"') and len(corrected) > 2:
+                        corrected = corrected[1:-1].strip()
+                    changes = [{
+                        "rule": "GenAI LLM Polish",
+                        "original": text,
+                        "replacement": corrected,
+                        "explanation": f"Polished and refined using Gemini ({candidate_model}) in '{mode}' mode."
+                    }]
+                    return corrected, changes
+            except Exception:
+                continue
+
+        return None

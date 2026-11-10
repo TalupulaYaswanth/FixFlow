@@ -65,6 +65,26 @@ class TestNLPModule(unittest.TestCase):
         self.assertIn("an apple", corrected)
         self.assertIn("they are", corrected)
 
+    def test_preposition_and_tautology_corrections(self):
+        text = "The manager emphasized on the fact that every single employee must cooperate together."
+        corrected, changes = self.nlp.fix_grammar(text)
+        self.assertIn("emphasized that", corrected)
+        self.assertNotIn("emphasized on", corrected)
+        self.assertIn("every employee", corrected)
+        self.assertIn("cooperate", corrected)
+        self.assertNotIn("cooperate together", corrected)
+
+    def test_expletive_and_wordiness_corrections(self):
+        text = "In order to successfully complete the project before the deadline, it is required that all team members should work extra hours."
+        corrected, changes = self.nlp.fix_grammar(text)
+        self.assertTrue(corrected.startswith("To ") or "to successfully" in corrected)
+        self.assertIn("all team members must work", corrected)
+
+    def test_dangling_modifier_and_relative_clause(self):
+        text = "Walking into the room, the presentation was already being projected on the screen by John."
+        corrected, changes = self.nlp.fix_grammar(text)
+        self.assertIn("When we walked into the room, John was already projecting", corrected)
+
 
 class TestPromptOptimizer(unittest.TestCase):
     def setUp(self):

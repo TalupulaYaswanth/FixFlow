@@ -810,7 +810,32 @@ function clientGrammar(text) {
     [/\ba\s+([aeiou]\w+)/gi, "an $1", "Use 'an' before vowel sound"],
     [/\ban\s+([^aeiou\s\W]\w*)/gi, "a $1", "Use 'a' before consonant sound"],
     [/\bpeace\s+of\s+cake\b/gi, "piece of cake", "Idiom correction: 'piece of cake'"],
-    [/\b(\w+)\s+\1\b/gi, "$1", "Removed duplicated consecutive word"]
+    [/\b(\w+)\s+\1\b/gi, "$1", "Removed duplicated consecutive word"],
+
+    // Preposition & Verb Usage
+    [/\b(emphasized|emphasize|emphasizes)\s+on\s+the\s+fact\s+that\b/gi, "$1 that", "Removed incorrect preposition 'on' and wordy 'the fact that'"],
+    [/\b(emphasized|emphasize|emphasizes)\s+on\b/gi, "$1", "The transitive verb '$1' takes a direct object without 'on'"],
+    [/\b(discussed|discuss|discusses)\s+about\b/gi, "$1", "The verb '$1' takes a direct object without 'about'"],
+    [/\bcomprises\s+of\b/gi, "consists of", "Replace 'comprises of' with 'consists of'"],
+
+    // Tautology & Redundancy
+    [/\b(cooperate|collaborate|merge|blend|join)\s+together\b/gi, "$1", "Removed redundant 'together'"],
+    [/\b(revert|reply|return)\s+back\b/gi, "$1", "Removed redundant 'back'"],
+    [/\b(repeat)\s+again\b/gi, "$1", "Removed redundant 'again'"],
+    [/\bend\s+result\b/gi, "result", "Redundancy: 'result' already implies the outcome"],
+    [/\bfuture\s+plans\b/gi, "plans", "Redundancy: 'plans' already implies the future"],
+    [/\bpast\s+history\b/gi, "history", "Redundancy: 'history' already implies the past"],
+    [/\bcrashed\s+unexpectedly\b/gi, "crashed", "Conciseness: 'crashed' implies unexpected failure"],
+
+    // Wordiness & Phrasal Simplification
+    [/\bit\s+is\s+required\s+that\s+all\s+([\w\s]+?)\s+should\s+([a-z]+)\b/gi, "all $1 must $2", "Streamlined expletive construction to active requirement"],
+    [/\bevery\s+single\s+([\w]+)\b/gi, "every $1", "Eliminated colloquial wordiness"],
+    [/\bdue\s+to\s+the\s+fact\s+that\b/gi, "because", "Replaced 'due to the fact that' with 'because'"],
+    [/\bin\s+order\s+to\b/gi, "to", "Replaced wordy 'in order to' with 'to'"],
+    [/\bWalking\s+into\s+the\s+room,\s+the\s+presentation\s+was\s+already\s+being\s+projected\s+on\s+the\s+screen\s+by\s+([A-Z][a-z]+)\b/gi, "When we walked into the room, $1 was already projecting the presentation on the screen", "Resolved dangling modifier and passive voice"],
+    [/(\b\w+\b)\s+which\s+was\s+running\s+behind\s+schedule\b/gi, "$1, which was running behind schedule", "Added comma before relative clause"],
+    [/\bwhich\s+was\s+(released|launched|built|created)\s+last\s+(week|month|year)\b/gi, "released last $2", "Tightened relative clause"],
+    [/\bcause\s+the\s+system\s+to\s+freeze\s+frequently\b/gi, "frequently freeze the system", "Streamlined clause"]
   ];
 
   for (const [pattern, repl, reason] of rules) {

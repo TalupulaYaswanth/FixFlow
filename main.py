@@ -81,7 +81,7 @@ class CorrectionRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=50000, description="The input text to correct")
     mode: CorrectionMode = Field(default=CorrectionMode.SPELL, description="Correction mode ('spell', 'grammar', 'tone')")
     tone: Optional[ToneStyle] = Field(default=ToneStyle.FORMAL, description="Target tone style if mode is 'tone'")
-    use_llm: Optional[bool] = Field(default=False, description="Attempt LLM GenAI enhancement if available")
+    use_llm: Optional[bool] = Field(default=None, description="Attempt LLM GenAI enhancement if available")
 
 
 class DiffChunk(BaseModel):
@@ -175,29 +175,39 @@ def correct_text(payload: CorrectionRequest):
     changes = []
     corrected_text = input_text
 
+    should_use_llm = payload.use_llm if payload.use_llm is not None else (nlp_engine.genai_client is not None)
+
     if payload.mode == CorrectionMode.SPELL:
         corrected_text, changes = dp_engine.correct_text(input_text)
 
     elif payload.mode == CorrectionMode.GRAMMAR:
         llm_result = None
-        if payload.use_llm:
+        if should_use_llm:
             llm_result = nlp_engine.correct_with_llm(input_text, mode="grammar")
 
         if llm_result is not None:
             corrected_text, changes = llm_result
         else:
-            corrected_text, changes = nlp_engine.fix_grammar(input_text)
+            # Multi-tier pipeline: DP spelling pass -> NLP grammar pass
+            spell_text, spell_changes = dp_engine.correct_text(input_text)
+            grammar_text, grammar_changes = nlp_engine.fix_grammar(spell_text)
+            corrected_text = grammar_text
+            changes = spell_changes + grammar_changes
 
     elif payload.mode == CorrectionMode.TONE:
         target_tone = payload.tone.value if payload.tone else "formal"
         llm_result = None
-        if payload.use_llm:
+        if should_use_llm:
             llm_result = nlp_engine.correct_with_llm(input_text, mode="tone", tone=target_tone)
 
         if llm_result is not None:
             corrected_text, changes = llm_result
         else:
-            corrected_text, changes = nlp_engine.polish_tone(input_text, target_tone=target_tone)
+            # Multi-tier pipeline: DP spelling pass -> Tone polish pass (with grammar cleanup)
+            spell_text, spell_changes = dp_engine.correct_text(input_text)
+            tone_text, tone_changes = nlp_engine.polish_tone(spell_text, target_tone=target_tone)
+            corrected_text = tone_text
+            changes = spell_changes + tone_changes
 
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported mode: {payload.mode}")
@@ -307,15 +317,19 @@ async def upload_file_endpoint(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"File parse error: {str(e)}")
 
-    # Run correction
+    # Run multi-tier pipeline correction
     if mode == "spell":
         corrected, changes = dp_engine.correct_text(extracted_text)
     elif mode == "grammar":
-        corrected, changes = nlp_engine.fix_grammar(extracted_text)
+        s_text, s_changes = dp_engine.correct_text(extracted_text)
+        corrected, g_changes = nlp_engine.fix_grammar(s_text)
+        changes = s_changes + g_changes
     elif mode == "presentation" and file_type == "pptx":
         corrected, changes = prompt_opt.optimize_presentation_slides(extracted_text)
     else:
-        corrected, changes = nlp_engine.polish_tone(extracted_text, target_tone=tone)
+        s_text, s_changes = dp_engine.correct_text(extracted_text)
+        corrected, t_changes = nlp_engine.polish_tone(s_text, target_tone=tone)
+        changes = s_changes + t_changes
 
     raw_diff = lcs_diff(extracted_text[:3000], corrected[:3000], mode="word")
     edit_dist = levenshtein_distance(extracted_text[:1000], corrected[:1000])

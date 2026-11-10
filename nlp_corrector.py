@@ -119,12 +119,30 @@ GRAMMAR_PATTERNS: List[Tuple[str, str, str]] = [
     (r'(\b\w+\b)\s+which\s+was\s+(running|operating|already)\s+behind\s+schedule\b', r'\1, which was \2 behind schedule', "Added comma before non-restrictive relative clause"),
     (r'\bwhich\s+was\s+(released|launched|built|created|introduced)\s+last\s+(week|month|year)\b', r'released last \2', "Tightened relative clause"),
     (r'\bcause\s+the\s+system\s+to\s+freeze\s+frequently\b', r'frequently freeze the system', "Streamlined periphrastic cause"),
+
+    # Subject-Verb Agreement in Academic & News Contexts
+    (r'\b(growth|economy|production|demand|supply|development|rate|inflation|price|cost|market|system|process)\s+have\b', r'\1 has', "Subject-verb agreement: singular noun requires 'has'"),
+    (r'\b(results|findings|studies|experiments|data|models|observations|records|reports)\s+(clearly\s+|strongly\s+|also\s+|further\s+)?shows\b', r'\1 \2show', "Subject-verb agreement: plural noun requires 'show'"),
+    (r'\b(results|findings|studies|experiments|data|models|observations|records|reports)\s+(clearly\s+|strongly\s+|also\s+|further\s+)?proves\b', r'\1 \2prove', "Subject-verb agreement: plural noun requires 'prove'"),
+    (r'\b(we|they)\s+investigates\b', r'\1 investigate', "Subject-verb agreement: plural pronoun requires 'investigate'"),
+    (r'\b(we|they)\s+demonstrates\b', r'\1 demonstrate', "Subject-verb agreement: plural pronoun requires 'demonstrate'"),
+    (r'\b(we|they)\s+proposes\b', r'\1 propose', "Subject-verb agreement: plural pronoun requires 'propose'"),
+    (r'\b(we|they)\s+evaluates\b', r'\1 evaluate', "Subject-verb agreement: plural pronoun requires 'evaluate'"),
+    (r'\b(we|they)\s+analyzes\b', r'\1 analyze', "Subject-verb agreement: plural pronoun requires 'analyze'"),
+    (r'\b(we|they)\s+examines\b', r'\1 examine', "Subject-verb agreement: plural pronoun requires 'examine'"),
+
+    # News & Academic Confusions
+    (r'\b(has|have|had|is|are|was|were)\s+effected\s+(by|millions|thousands|hundreds|people|the|our|their|a|an)\b', r'\1 affected \2', "Use 'affected' (verb meaning influenced/impacted) rather than 'effected'"),
+    (r'\bas\s+compared\s+(to|with)\b', r'compared \1', "Conciseness: replace 'as compared to' with 'compared to'"),
+    (r'\b(european|american|asian|african|australian|indian|british|chinese|japanese|german|french|italian|canadian)\b', lambda m: m.group(0).capitalize(), "Capitalize proper adjectives and nationalities"),
+    (r'\bplays\s+an\s+crucial\s+role\b', r'plays a crucial role', "Use 'a' before consonant sound 'crucial'"),
+    (r'\bplay\s+an\s+crucial\s+role\b', r'play a crucial role', "Use 'a' before consonant sound 'crucial'"),
 ]
 
 # Punctuation formatting rules
 PUNCTUATION_FIXES: List[Tuple[str, str, str]] = [
-    (r'\s+([,\.!?:;])', r'\1', "Removed whitespace before punctuation mark"),
-    (r'([,\.!?:;])(?=[a-zA-Z])', r'\1 ', "Added required space after punctuation mark"),
+    (r'(?<!\d)\s+([,\.!?:;])', r'\1', "Removed whitespace before punctuation mark"),
+    (r'([,\.!?:;])(?=[a-zA-Z])(?<!e\.g\.)(?<!i\.e\.)', r'\1 ', "Added required space after punctuation mark"),
     (r'([\.!?])\s+([a-z])', lambda m: f"{m.group(1)} {m.group(2).upper()}", "Capitalized sentence beginning"),
     (r'\b(i)\b', r'I', "Always capitalize the personal pronoun 'I'"),
 ]
@@ -245,7 +263,10 @@ class NLPCorrector:
             })
 
         def _apply_repl(m, repl):
-            expanded = m.expand(repl)
+            if callable(repl):
+                expanded = repl(m)
+            else:
+                expanded = m.expand(repl)
             orig = m.group(0)
             if orig and orig[0].isupper() and expanded and expanded[0].islower():
                 expanded = expanded[0].upper() + expanded[1:]

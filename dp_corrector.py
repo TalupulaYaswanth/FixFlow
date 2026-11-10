@@ -211,6 +211,10 @@ COMMON_CONTRACTIONS: Dict[str, str] = {
     "theres": "there's",
     "heres": "here's",
     "lets": "let's",
+    "todays": "today's",
+    "countrys": "country's",
+    "companys": "company's",
+    "worlds": "world's",
 }
 
 
@@ -476,8 +480,8 @@ class DPCorrector:
           - corrected_text: str
           - changes: List of dicts describing changes made
         """
-        # Split tokens while retaining delimiters, keeping words with internal apostrophes intact
-        tokens = re.findall(r"[a-zA-Z]+(?:'[a-zA-Z]+)?|\s+|[^\w\s]", text)
+        # Split tokens while retaining delimiters, keeping words with internal apostrophes and numbers intact
+        tokens = re.findall(r"[a-zA-Z]+(?:'[a-zA-Z]+)?|\d+(?:\.\d+)?|\s+|[^\w\s]", text)
         corrected_tokens = []
         changes = []
 

@@ -10,6 +10,7 @@ This module implements core Dynamic Programming algorithms:
 """
 
 from typing import List, Tuple, Dict, Optional, Set
+import os
 import re
 import math
 from collections import Counter
@@ -168,6 +169,18 @@ DEFAULT_VOCABULARY: Dict[str, int] = {
     "country": 95000, "nature": 86000, "environment": 88000, "love": 98000,
 }
 
+# Automatically load comprehensive 20,000-word vocabulary from vocabulary.txt if present
+_vocab_file = os.path.join(os.path.dirname(__file__), "vocabulary.txt")
+if os.path.exists(_vocab_file):
+    try:
+        with open(_vocab_file, "r", encoding="utf-8") as _vf:
+            for _line in _vf:
+                _w = _line.strip().lower()
+                if _w and _w not in DEFAULT_VOCABULARY:
+                    DEFAULT_VOCABULARY[_w] = 45000
+    except Exception:
+        pass
+
 # Common colloquial contractions missing apostrophes
 COMMON_CONTRACTIONS: Dict[str, str] = {
     "dont": "don't",
@@ -323,8 +336,57 @@ class DPCorrector:
         self.known_words = set(self.vocab.keys())
 
     def is_known(self, word: str) -> bool:
-        """Returns True if the word is in the known vocabulary."""
-        return word.lower() in self.known_words
+        """
+        Returns True if the word or its standard morphological inflection is in vocabulary.
+        Prevents destructive over-correction of valid adverbs, past-tense verbs, and plurals
+        while preserving correct detection of common spelling errors (like missing doubled consonants).
+        """
+        w = word.lower().strip()
+        if w in self.known_words:
+            return True
+
+        vowels = "aeiou"
+
+        # Adverbs ending in -ly:
+        if w.endswith("ly"):
+            if w[:-2] in self.known_words or (w.endswith("ily") and w[:-3] + "y" in self.known_words) or (w.endswith("ally") and w[:-4] in self.known_words):
+                return True
+
+        # Participles ending in -ing:
+        if w.endswith("ing"):
+            stem = w[:-3]
+            # Doubled consonants: running -> run, programming -> program
+            if len(w) > 5 and w[-4] == w[-5] and w[:-4] in self.known_words:
+                return True
+            # Silent 'e' drop: making -> make, writing -> write
+            if stem + "e" in self.known_words:
+                return True
+            if stem in self.known_words:
+                # If stem ends in short vowel + consonant (like run, stop, program), single consonant is a typo
+                if len(stem) >= 3 and stem[-1] not in vowels and stem[-2] in vowels and stem[-3] not in vowels:
+                    return False
+                return True
+
+        # Past tense verbs ending in -ed:
+        if w.endswith("ed"):
+            stem = w[:-2]
+            if len(w) > 4 and w[-3] == w[-4] and w[:-3] in self.known_words:
+                return True
+            if w[:-1] in self.known_words:  # like -> liked
+                return True
+            if w.endswith("ied") and w[:-3] + "y" in self.known_words:  # carry -> carried
+                return True
+            if stem in self.known_words:
+                if len(stem) >= 3 and stem[-1] not in vowels and stem[-2] in vowels and stem[-3] not in vowels:
+                    return False
+                return True
+
+        # Plurals ending in -s / -es:
+        if w.endswith("s"):
+            if w[:-1] in self.known_words or (w.endswith("es") and w[:-2] in self.known_words) or (w.endswith("ies") and w[:-3] + "y" in self.known_words):
+                return True
+
+        return False
 
     def get_suggestions(
         self,
@@ -437,7 +499,7 @@ class DPCorrector:
                     })
                     continue
 
-                if clean_lower not in self.known_words:
+                if not self.is_known(clean_lower):
                     suggestions = self.get_suggestions(token, k=3, max_distance=3)
                     if suggestions:
                         best_match, best_dist, _ = suggestions[0]
@@ -455,6 +517,19 @@ class DPCorrector:
                             is_valid_replacement = False
                         elif token_len <= 4 and (best_dist > 1 or cand_len < token_len - 1):
                             is_valid_replacement = False
+
+                        # Never truncate productive grammatical suffixes (-ly, -ing, -ed, -s)
+                        if is_valid_replacement:
+                            t_lower = token.lower()
+                            bm_lower = best_match.lower()
+                            if t_lower.endswith("ly") and not bm_lower.endswith("ly") and cand_len == token_len - 2:
+                                is_valid_replacement = False
+                            elif t_lower.endswith("ing") and not bm_lower.endswith("ing") and cand_len == token_len - 3:
+                                is_valid_replacement = False
+                            elif t_lower.endswith("ed") and not bm_lower.endswith("ed") and cand_len == token_len - 2:
+                                is_valid_replacement = False
+                            elif t_lower.endswith("s") and not bm_lower.endswith("s") and cand_len == token_len - 1:
+                                is_valid_replacement = False
 
                         # Proper noun & Name protection: Capitalized words should not become 2-letter function words
                         if is_valid_replacement and token[0].isupper():

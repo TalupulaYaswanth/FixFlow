@@ -244,19 +244,27 @@ class NLPCorrector:
                 "explanation": "Capitalized opening letter of the sentence."
             })
 
+        def _apply_repl(m, repl):
+            expanded = m.expand(repl)
+            orig = m.group(0)
+            if orig and orig[0].isupper() and expanded and expanded[0].islower():
+                expanded = expanded[0].upper() + expanded[1:]
+            return expanded
+
         # Apply Grammar Pattern Transformations
         for pattern, replacement, reason in GRAMMAR_PATTERNS:
             matches = list(re.finditer(pattern, result, flags=re.IGNORECASE))
             if matches:
                 # Track each change
                 for m in matches:
+                    expanded_text = _apply_repl(m, replacement)
                     changes.append({
                         "rule": "Grammar & Syntax",
                         "original": m.group(0),
-                        "replacement": re.sub(pattern, replacement, m.group(0), flags=re.IGNORECASE),
+                        "replacement": expanded_text,
                         "explanation": reason
                     })
-                result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+                result = re.sub(pattern, lambda m, r=replacement: _apply_repl(m, r), result, flags=re.IGNORECASE)
 
         # Apply Punctuation & Capitalization Fixes
         for pattern, replacement, reason in PUNCTUATION_FIXES:
@@ -282,6 +290,10 @@ class NLPCorrector:
                 "explanation": "Added terminal period."
             })
             result = trimmed
+
+        # Ensure sentence opening letter is capitalized
+        if result and result[0].isalpha() and result[0].islower():
+            result = result[0].upper() + result[1:]
 
         return result, changes
 
@@ -318,6 +330,10 @@ class NLPCorrector:
         # Run grammar cleanup pass on polished text
         result, grammar_changes = self.fix_grammar(result)
         changes.extend(grammar_changes)
+
+        # Ensure sentence opening letter is capitalized
+        if result and result[0].isalpha() and result[0].islower():
+            result = result[0].upper() + result[1:]
 
         return result, changes
 

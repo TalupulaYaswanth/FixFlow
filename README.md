@@ -2,6 +2,11 @@
 
 FixFlow is a high-performance text correction and linguistic enhancement system combining classical **Dynamic Programming (DP)** algorithms with modern **Natural Language Processing (NLP)** and Large Language Models.
 
+[![CI](https://github.com/TalupulaYaswanth/FixFlow/actions/workflows/ci.yml/badge.svg)](https://github.com/TalupulaYaswanth/FixFlow/actions)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Render-brightgreen)](https://fixflow-2hpv.onrender.com)
+[![Architecture Spec](https://img.shields.io/badge/Architecture-Specification-blue)](./ARCHITECTURE_SPECIFICATION.md)
+[![Evaluation Report](https://img.shields.io/badge/Evaluation-Report_%26_Proofs-orange)](./EVALUATION_REPORT.md)
+
 ---
 
 ## 🌟 Key Features

@@ -1,9 +1,9 @@
 # 📊 FixFlow: Evaluation Data, Accuracy Proofs & Benchmark Report
 
 **Generated:** November 2026  
-**Environment:** Python 3.11.9 | Windows NT | FastAPI + Dynamic Programming Core  
+**Environment:** Python 3.11.9 | Linux / Windows | FastAPI + Dynamic Programming Core  
 **Test Suite Status:** ✅ **100% PASSING** (17/17 Unit Tests + 7/7 Real-World Benchmarks)  
-**Location in Repository:** [`EVALUATION_REPORT.md`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/EVALUATION_REPORT.md)  
+**Location in Repository:** [`./EVALUATION_REPORT.md`](./EVALUATION_REPORT.md)  
 
 ---
 
@@ -11,14 +11,14 @@
 
 | Test Category | Suite File | Total Cases | Passed | Failed | Accuracy Rate | Avg. Latency |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Real-World News Corpora** | [`test_realworld.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_realworld.py) | 2 | 2 | 0 | **100%** | 8.2 ms |
-| **Tech & Business Articles** | [`test_realworld.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_realworld.py) | 2 | 2 | 0 | **100%** | 11.4 ms |
-| **Scientific Research Papers** | [`test_realworld.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_realworld.py) | 3 | 3 | 0 | **100%** | 12.1 ms |
-| **Dynamic Programming Core** | [`test_fixflow.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py) | 6 | 6 | 0 | **100%** | 4.3 ms |
-| **NLP Grammar & Syntax Rules** | [`test_fixflow.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py) | 4 | 4 | 0 | **100%** | 3.1 ms |
-| **Domain Prompt Optimizers** | [`test_fixflow.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py) | 3 | 3 | 0 | **100%** | 7.9 ms |
-| **Document Ingestion (.pptx, .txt)** | [`test_fixflow.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py) | 2 | 2 | 0 | **100%** | 14.5 ms |
-| **FastAPI REST Endpoints** | [`test_fixflow.py`](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py) | 2 | 2 | 0 | **100%** | 18.2 ms |
+| **Real-World News Corpora** | [`./test_realworld.py`](./test_realworld.py) | 2 | 2 | 0 | **100%** | 8.2 ms |
+| **Tech & Business Articles** | [`./test_realworld.py`](./test_realworld.py) | 2 | 2 | 0 | **100%** | 11.4 ms |
+| **Scientific Research Papers** | [`./test_realworld.py`](./test_realworld.py) | 3 | 3 | 0 | **100%** | 12.1 ms |
+| **Dynamic Programming Core** | [`./test_fixflow.py`](./test_fixflow.py) | 6 | 6 | 0 | **100%** | 4.3 ms |
+| **NLP Grammar & Syntax Rules** | [`./test_fixflow.py`](./test_fixflow.py) | 4 | 4 | 0 | **100%** | 3.1 ms |
+| **Domain Prompt Optimizers** | [`./test_fixflow.py`](./test_fixflow.py) | 3 | 3 | 0 | **100%** | 7.9 ms |
+| **Document Ingestion (.pptx, .txt)** | [`./test_fixflow.py`](./test_fixflow.py) | 2 | 2 | 0 | **100%** | 14.5 ms |
+| **FastAPI REST Endpoints** | [`./test_fixflow.py`](./test_fixflow.py) | 2 | 2 | 0 | **100%** | 18.2 ms |
 
 ---
 
@@ -148,7 +148,7 @@ For the benchmark transition (`"kitten"` $\rightarrow$ `"sitting"`):
 * Dimensions: $8 \times 8$
 * Final Edit Distance: $DP[7][7] = 3$
 * Optimal Path Coordinates: $(0,0) \rightarrow (1,1) \rightarrow (2,2) \rightarrow (3,3) \rightarrow (4,4) \rightarrow (5,5) \rightarrow (6,6) \rightarrow (7,7)$
-* Proof in Code: Asserted in `test_levenshtein_matrix` ([Line 30](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py#L30)).
+* Proof in Code: Asserted in `test_levenshtein_matrix` ([`./test_fixflow.py#L30`](./test_fixflow.py#L30)).
 
 ### 2. Longest Common Subsequence (LCS) Diff Matrix Proof
 For the benchmark sentence (`"the quik brown fox"` $\rightarrow$ `"the quick brown fox"`):
@@ -157,13 +157,13 @@ For the benchmark sentence (`"the quik brown fox"` $\rightarrow$ `"the quick bro
   - `delete: "quik"`
   - `insert: "quick"`
   - `equal: " brown fox"`
-* Proof in Code: Asserted in `test_lcs_diff` ([Line 36](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py#L36)).
+* Proof in Code: Asserted in `test_lcs_diff` ([`./test_fixflow.py#L36`](./test_fixflow.py#L36)).
 
 ### 3. Viterbi Trellis Bigram Matrix Proof
 For the candidate sequence `["quik", "brown", "fox"]`:
 * State Transition Lattice:
   $$\arg\max_{W} \prod_{t=1}^T P(o_t \mid w_t) \cdot P(w_t \mid w_{t-1}) = [\text{"quick"}, \text{"brown"}, \text{"fox"}]$$
-* Proof in Code: Asserted in `test_viterbi_context_corrector` ([Line 56](file:///c:/Users/V/OneDrive/ドキュメント/Rockstar Games/new_472/test_fixflow.py#L56)).
+* Proof in Code: Asserted in `test_viterbi_context_corrector` ([`./test_fixflow.py#L56`](./test_fixflow.py#L56)).
 
 ---
 

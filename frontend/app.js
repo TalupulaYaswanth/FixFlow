@@ -3,7 +3,18 @@
  * Powered by Dynamic Programming (Levenshtein, LCS) & NLP Heuristics
  */
 
-const API_BASE = ""; // Relative path when served via FastAPI, or falls back to http://127.0.0.1:8000
+function resolveApiBase() {
+  if (typeof window !== "undefined") {
+    if (window.location.protocol === "file:") {
+      return "http://127.0.0.1:8000";
+    }
+    if (window.location.port === "3000" || window.location.port === "5500") {
+      return "http://127.0.0.1:8000";
+    }
+  }
+  return ""; // default relative path when served by FastAPI or Render
+}
+const API_BASE = resolveApiBase();
 let isBackendOnline = false;
 
 // ============================================================================
@@ -45,7 +56,7 @@ let lastCorrectedOutput = "";
 // ============================================================================
 async function checkBackendHealth() {
   try {
-    const res = await fetch("/health", { method: "GET" });
+    const res = await fetch(`${API_BASE}/health`, { method: "GET" });
     if (res.ok) {
       const data = await res.json();
       isBackendOnline = true;
@@ -350,17 +361,22 @@ function handleFileSelected(file) {
   fileInfoCard.style.display = "flex";
 
   const ext = file.name.split('.').pop().toLowerCase();
+  const textExts = ["txt", "md", "csv", "json", "py", "html", "xml", "log", "rtf", "yaml", "yml"];
 
-  // If text file, read immediately client side
-  if (["txt", "md", "csv", "json"].includes(ext)) {
+  // If text file, read immediately client side via FileReader
+  if (textExts.includes(ext)) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      extractedDocText.value = e.target.result;
+      extractedDocText.value = e.target.result || "";
       updateCharCount(extractedDocText, docCharCount);
+      showToast(`Loaded ${file.name}`);
+    };
+    reader.onerror = () => {
+      uploadAndExtractFile(file);
     };
     reader.readAsText(file);
   } else {
-    // If binary (PPTX, DOCX, PDF), send to backend parser
+    // If binary (PPTX, DOCX, PDF, etc.), send to backend parser
     uploadAndExtractFile(file);
   }
 }
@@ -372,18 +388,28 @@ async function uploadAndExtractFile(file) {
   formData.append("mode", "spell");
 
   try {
-    const res = await fetch("/upload-file", {
+    const res = await fetch(`${API_BASE}/upload-file`, {
       method: "POST",
       body: formData
     });
-    if (!res.ok) throw new Error("Server extraction failed");
+    if (!res.ok) {
+      let errDetail = `Server extraction error (${res.status})`;
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.detail) errDetail = errJson.detail;
+      } catch (e) {}
+      throw new Error(errDetail);
+    }
     const data = await res.json();
-    extractedDocText.value = data.extracted_text || "";
+    const extracted = data.extracted_text || "";
+    extractedDocText.value = extracted;
     updateCharCount(extractedDocText, docCharCount);
     showToast(`Loaded ${file.name}`);
   } catch (err) {
-    extractedDocText.value = `[Uploaded: ${file.name}]\nSample presentation text:\n• quik brown fox\n• he dont have any errors\n• dynmic programing algorithms`;
+    console.error("Extraction error:", err);
+    extractedDocText.value = `[Could not extract text from "${file.name}"]\nReason: ${err.message}\n\nPlease ensure your backend API is online and the document contains selectable text (.pptx, .docx, .pdf, or .txt).`;
     updateCharCount(extractedDocText, docCharCount);
+    showToast(`Upload failed: ${err.message}`);
   }
 }
 
@@ -456,7 +482,7 @@ async function processCorrection(text, mode, tone) {
   let diff = null;
 
   try {
-    const res = await fetch("/correct", {
+    const res = await fetch(`${API_BASE}/correct`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, mode, tone })
@@ -487,7 +513,7 @@ async function processEmailOptimization(payload) {
   let changes = [];
 
   try {
-    const res = await fetch("/optimize/email", {
+    const res = await fetch(`${API_BASE}/optimize/email`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -517,7 +543,7 @@ async function processPromptOptimization(rawPrompt, targetModel) {
   let changes = [];
 
   try {
-    const res = await fetch("/optimize/ai-prompt", {
+    const res = await fetch(`${API_BASE}/optimize/ai-prompt`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ raw_prompt: rawPrompt, target_model: targetModel })

@@ -104,9 +104,39 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
     if pages_text:
         return "\n\n".join(pages_text)
 
-    # Fallback: extract continuous printable text chunks from raw stream
+    # Fallback 1: Scan for and decompress zlib FlateDecode streams in compressed PDFs
+    import zlib
     import re
     extracted_chunks = []
+    try:
+        stream_chunks = re.findall(rb'stream[\r\n]+([\s\S]*?)[\r\n]+endstream', file_bytes)
+        for raw_s in stream_chunks:
+            decomp = None
+            try:
+                decomp = zlib.decompress(raw_s)
+            except Exception:
+                try:
+                    decomp = zlib.decompress(raw_s, -15)
+                except Exception:
+                    pass
+            if decomp:
+                # Find (text) Tj
+                for tj in re.findall(rb'\(((?:\\.|[^\)])*)\)\s*Tj', decomp):
+                    clean = tj.decode('latin-1', errors='ignore').strip()
+                    if clean and len(clean) > 1:
+                        extracted_chunks.append(clean)
+                # Find [(text1) -20 (text2)] TJ
+                for tj in re.findall(rb'\[(.*?)\]\s*TJ', decomp):
+                    parts = re.findall(rb'\(((?:\\.|[^\)])*)\)', tj)
+                    joined = b" ".join(parts).decode('latin-1', errors='ignore').strip()
+                    if joined and len(joined) > 1:
+                        extracted_chunks.append(joined)
+        if extracted_chunks:
+            return "\n".join(extracted_chunks[:400])
+    except Exception:
+        pass
+
+    # Fallback 2: extract continuous printable text chunks from raw stream
     try:
         for chunk in re.findall(rb'[\x20-\x7E\r\n]{5,}', file_bytes):
             decoded = chunk.decode('latin-1', errors='ignore').strip()

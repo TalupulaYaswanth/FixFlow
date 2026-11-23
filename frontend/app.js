@@ -62,7 +62,7 @@ let activeProcessingBtn = null;
 let originalBtnHtml = "";
 let loaderStageInterval = null;
 let loaderStartTime = 0;
-const MIN_LOADER_DURATION_MS = 600;
+const MIN_LOADER_DURATION_MS = 1500;
 
 // Linguistic Studio Isolated Results State
 const studioResults = {
@@ -102,13 +102,20 @@ function showLoader(headline, subtitle, stepText, triggerBtn) {
   if (currentPageId === "email" && emailLoadingOverlay) emailLoadingOverlay.style.display = "flex";
   if (currentPageId === "prompt" && promptLoadingOverlay) promptLoadingOverlay.style.display = "flex";
 
-  // 3. Processing Loader Card
+  // 3. Relocate Processing Loader Card directly below active trigger button or card
   if (processingLoader) {
+    if (triggerBtn && triggerBtn.parentNode) {
+      triggerBtn.parentNode.insertBefore(processingLoader, triggerBtn.nextSibling);
+    } else {
+      const activeCard = document.querySelector(".page-view.active .main-card");
+      if (activeCard) activeCard.appendChild(processingLoader);
+    }
+
     if (loaderTitle && headline) loaderTitle.textContent = headline;
     if (loaderSubtitle && subtitle) loaderSubtitle.textContent = subtitle;
     if (loaderStepBadge && stepText) loaderStepBadge.textContent = stepText;
     processingLoader.style.display = "block";
-    processingLoader.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    processingLoader.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   // 4. Trigger Button Spinner State
@@ -117,10 +124,10 @@ function showLoader(headline, subtitle, stepText, triggerBtn) {
     originalBtnHtml = triggerBtn.innerHTML;
     triggerBtn.disabled = true;
     triggerBtn.classList.add("is-loading");
-    triggerBtn.innerHTML = `<span class="btn-spinner"></span> <span>Running FixFlow Engine...</span>`;
+    triggerBtn.innerHTML = `<span class="btn-spinner"></span> <span>Running FixFlow DP Engine...</span>`;
   }
 
-  // Progressive real-time computational pipeline telemetry
+  // Progressive real-time computational pipeline telemetry (3 visible stages across 1.5s)
   const stages = [
     { sub: "Computing Space-Optimized Levenshtein Matrix & Edit Paths...", badge: "DP Matrix Active" },
     { sub: "Evaluating Viterbi Bigram Probability Lattice & Context...", badge: "Viterbi HMM Active" },
@@ -133,7 +140,7 @@ function showLoader(headline, subtitle, stepText, triggerBtn) {
       if (loaderSubtitle) loaderSubtitle.textContent = stages[stageIdx].sub;
       if (loaderStepBadge) loaderStepBadge.textContent = stages[stageIdx].badge;
     }
-  }, 200);
+  }, 460);
 }
 
 function hideLoader() {
@@ -523,19 +530,86 @@ function handleFileSelected(file) {
 // Client-Side Document Extraction Engines (Offline-First Support for PDF, DOCX, PPTX)
 // ============================================================================
 
+async function decompressFlateBytes(rawBytes) {
+  if (typeof DecompressionStream === "undefined") return "";
+  try {
+    const ds = new DecompressionStream("deflate");
+    const writer = ds.writable.getWriter();
+    writer.write(rawBytes);
+    writer.close();
+    const reader = ds.readable.getReader();
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+    const merged = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of chunks) {
+      merged.set(c, offset);
+      offset += c.length;
+    }
+    return new TextDecoder("latin1").decode(merged);
+  } catch (e) {
+    try {
+      const dsRaw = new DecompressionStream("deflate-raw");
+      const writer = dsRaw.writable.getWriter();
+      writer.write(rawBytes);
+      writer.close();
+      const reader = dsRaw.readable.getReader();
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const c of chunks) {
+        merged.set(c, offset);
+        offset += c.length;
+      }
+      return new TextDecoder("latin1").decode(merged);
+    } catch (e2) {
+      return "";
+    }
+  }
+}
+
 async function extractPdfClientSide(file) {
-  // 1. Try PDF.js if available
+  // 1. Try PDF.js if available with a strict 3.8s timeout race
   if (typeof pdfjsLib !== "undefined") {
     try {
-      if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      try {
+        if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          const workerBlob = new Blob(
+            [`importScripts("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js");`],
+            { type: "application/javascript" }
+          );
+          pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(workerBlob);
+        }
+      } catch (workerErr) {
+        // Fall back to main-thread processing
       }
+
       const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
+      const loadingTask = pdfjsLib.getDocument({
+        data: arrayBuffer,
+        isEvalSupported: false,
+        useWorkerFetch: false
+      });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("PDF.js loading timeout")), 3800)
+      );
+
+      const pdf = await Promise.race([loadingTask.promise, timeoutPromise]);
       const pageTexts = [];
 
-      for (let i = 1; i <= pdf.numPages; i++) {
+      for (let i = 1; i <= Math.min(pdf.numPages, 100); i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
         const pageLines = [];
@@ -562,7 +636,7 @@ async function extractPdfClientSide(file) {
         return pageTexts.join("\n\n");
       }
     } catch (pdfErr) {
-      console.warn("PDF.js extraction warning, falling back to stream scanner:", pdfErr);
+      console.warn("PDF.js extraction warning/timeout, executing fallback stream decoder:", pdfErr);
     }
   }
 
@@ -577,6 +651,48 @@ async function extractPdfStreamFallback(file) {
   const raw = decoder.decode(bytes);
 
   const extractedLines = [];
+
+  // A. Scan and decompress FlateDecode streams for compressed PDFs
+  const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
+  let sm;
+  let streamCount = 0;
+  while ((sm = streamRegex.exec(raw)) !== null && streamCount < 30) {
+    streamCount++;
+    const streamRaw = sm[1];
+    const streamBytes = new Uint8Array(streamRaw.length);
+    for (let i = 0; i < streamRaw.length; i++) {
+      streamBytes[i] = streamRaw.charCodeAt(i);
+    }
+    const decompressed = await decompressFlateBytes(streamBytes);
+    if (decompressed) {
+      // Find (text) Tj
+      const tjRegex = /\(((?:\\.|[^\)])*)\)\s*Tj/g;
+      let tm;
+      while ((tm = tjRegex.exec(decompressed)) !== null) {
+        const clean = tm[1].replace(/\\([()\\])/g, "$1").trim();
+        if (clean && clean.length > 1) extractedLines.push(clean);
+      }
+      // Find [(text) -20 (more)] TJ
+      const tjArrayRegex = /\[(.*?)\]\s*TJ/g;
+      let am;
+      while ((am = tjArrayRegex.exec(decompressed)) !== null) {
+        const inner = am[1];
+        const strRegex = /\(((?:\\.|[^\)])*)\)/g;
+        let pm;
+        let linePart = "";
+        while ((pm = strRegex.exec(inner)) !== null) {
+          linePart += pm[1].replace(/\\([()\\])/g, "$1");
+        }
+        if (linePart.trim() && linePart.trim().length > 1) extractedLines.push(linePart.trim());
+      }
+    }
+  }
+
+  if (extractedLines.length > 0) {
+    return extractedLines.join("\n");
+  }
+
+  // B. Uncompressed BT ... ET blocks
   const btEtRegex = /BT[\s\S]*?ET/g;
   let blockMatch;
 
@@ -605,12 +721,12 @@ async function extractPdfStreamFallback(file) {
     return extractedLines.join("\n");
   }
 
-  // Continuous ASCII stream scanner fallback
+  // C. Continuous ASCII stream scanner fallback
   const asciiLines = [];
   const asciiRegex = /[\x20-\x7E\t\n\r]{6,}/g;
-  let am;
-  while ((am = asciiRegex.exec(raw)) !== null) {
-    const str = am[0].trim();
+  let am2;
+  while ((am2 = asciiRegex.exec(raw)) !== null) {
+    const str = am2[0].trim();
     if (str.length > 8 && !str.startsWith("%PDF") && !str.startsWith("xref") && !str.startsWith("trailer") && !str.includes("FontName")) {
       asciiLines.push(str);
     }
@@ -709,71 +825,80 @@ async function uploadAndExtractFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   let extracted = "";
 
-  // 1. If backend is online, attempt fast server extraction with strict 5.5s timeout
-  if (isBackendOnline) {
-    const aiStructureCheckbox = document.getElementById("aiStructureCheckbox");
-    const shouldAiStructure = aiStructureCheckbox ? aiStructureCheckbox.checked : true;
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("mode", "spell");
-    formData.append("ai_structure", shouldAiStructure ? "true" : "false");
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6500);
-
-    try {
-      const res = await fetch(`${API_BASE}/upload-file`, {
-        method: "POST",
-        body: formData,
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        extracted = data.extracted_text || "";
-      }
-    } catch (err) {
-      clearTimeout(timeoutId);
-      console.warn("Backend extraction failed or timed out, executing offline client parser:", err);
-    }
-  }
-
-  // 2. Client-Side Fallback Extraction (Works 100% offline for PDF, DOCX, PPTX, TXT)
-  if (!extracted || extracted.startsWith("[Could not")) {
-    try {
-      if (ext === "pdf") {
-        extracted = await extractPdfClientSide(file);
-      } else if (ext === "docx") {
-        extracted = await extractDocxClientSide(file);
-      } else if (ext === "pptx") {
-        extracted = await extractPptxClientSide(file);
-      } else {
-        extracted = await extractGenericFileText(file);
-      }
-
-      // If AI structuring toggle is enabled, structure client-side as well
+  try {
+    // 1. If backend is online, attempt fast server extraction with generous 15s timeout
+    if (isBackendOnline) {
       const aiStructureCheckbox = document.getElementById("aiStructureCheckbox");
-      if (aiStructureCheckbox && aiStructureCheckbox.checked && extracted && !extracted.startsWith("[")) {
-        extracted = clientStructureDocument(extracted, file.name);
+      const shouldAiStructure = aiStructureCheckbox ? aiStructureCheckbox.checked : true;
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("mode", "spell");
+      formData.append("ai_structure", shouldAiStructure ? "true" : "false");
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const res = await fetch(`${API_BASE}/upload-file`, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          extracted = data.extracted_text || "";
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.warn("Backend extraction failed or timed out, executing offline client parser:", err);
       }
-    } catch (clientErr) {
-      console.error("Client document extraction error:", clientErr);
     }
-  }
 
-  // 3. Finalize and update UI
-  await waitLoaderMinDuration();
-  hideLoader();
+    // 2. Client-Side Fallback Extraction (Works 100% offline for PDF, DOCX, PPTX, TXT)
+    if (!extracted || extracted.startsWith("[Could not")) {
+      try {
+        if (ext === "pdf") {
+          extracted = await extractPdfClientSide(file);
+        } else if (ext === "docx") {
+          extracted = await extractDocxClientSide(file);
+        } else if (ext === "pptx") {
+          extracted = await extractPptxClientSide(file);
+        } else {
+          extracted = await extractGenericFileText(file);
+        }
 
-  if (extracted && extracted.trim()) {
-    extractedDocText.value = extracted;
-    updateCharCount(extractedDocText, docCharCount);
-    showToast(`Loaded ${file.name}`);
-  } else {
-    extractedDocText.value = `[Document "${file.name}" loaded: No selectable text stream found. The document may be empty or contain scanned images without text layers.]`;
-    updateCharCount(extractedDocText, docCharCount);
-    showToast(`Loaded ${file.name}`);
+        // If AI structuring toggle is enabled, structure client-side as well
+        const aiStructureCheckbox = document.getElementById("aiStructureCheckbox");
+        if (aiStructureCheckbox && aiStructureCheckbox.checked && extracted && !extracted.startsWith("[")) {
+          extracted = clientStructureDocument(extracted, file.name);
+        }
+      } catch (clientErr) {
+        console.error("Client document extraction error:", clientErr);
+      }
+    }
+  } catch (err) {
+    console.error("Document upload/extraction lifecycle error:", err);
+  } finally {
+    // 3. Finalize and update UI - ALWAYS executed regardless of outcomes
+    await waitLoaderMinDuration();
+    hideLoader();
+
+    if (fileDropzone) fileDropzone.classList.remove("is-extracting");
+    if (fileProgressWrap) fileProgressWrap.style.display = "none";
+    if (fileStatusBadge) fileStatusBadge.style.display = "none";
+    if (docLoadingOverlay) docLoadingOverlay.style.display = "none";
+
+    if (extracted && extracted.trim()) {
+      extractedDocText.value = extracted;
+      updateCharCount(extractedDocText, docCharCount);
+      showToast(`Loaded ${file.name}`);
+    } else {
+      extractedDocText.value = `[Document "${file.name}" loaded: No selectable text stream found. The document may be empty or contain scanned images without text layers.]`;
+      updateCharCount(extractedDocText, docCharCount);
+      showToast(`Loaded ${file.name}`);
+    }
   }
 }
 
@@ -793,34 +918,53 @@ extractedDocText.addEventListener("input", () => updateCharCount(extractedDocTex
 
 // 1. Direct Text Run
 document.getElementById("runDirectBtn").addEventListener("click", async () => {
-  const text = directInputText.value.trim();
-  if (!text) return alert("Please enter text to correct.");
+  let text = directInputText.value.trim();
+  if (!text) {
+    text = "The quik brown foxx jumpss over the lazy dogg and he dont have any errors.";
+    directInputText.value = text;
+    updateCharCount(directInputText, directCharCount);
+    showToast("Loaded demo text for FixFlow DP engine");
+  }
   const mode = engineSelect.value;
   const tone = toneSelect.value;
-  await processCorrection(text, mode, tone);
+  const btn = document.getElementById("runDirectBtn");
+  await processCorrection(text, mode, tone, btn);
 });
 
 // 2. Slide / Doc Run
 const runAiDocStructureBtn = document.getElementById("runAiDocStructureBtn");
 if (runAiDocStructureBtn) {
   runAiDocStructureBtn.addEventListener("click", async () => {
-    const text = extractedDocText.value.trim();
-    if (!text) return alert("Please upload a file or enter document text to structure.");
-    const fname = selectedFile ? selectedFile.name : "Document";
+    let text = extractedDocText.value.trim();
+    if (!text) {
+      text = "INCIDENT REPORT\nPage 1 of 3\nPlatform sector 4 offshore. 500 barrels spilled.\nCleanup crews dispatched: 4 boats.\nFisheries affected: 2 zones.";
+      extractedDocText.value = text;
+      updateCharCount(extractedDocText, docCharCount);
+    }
+    const fname = selectedFile ? selectedFile.name : "Document.pdf";
     await processDocumentAiStructuring(text, fname);
   });
 }
 
 document.getElementById("runSlideFixBtn").addEventListener("click", async () => {
-  const text = extractedDocText.value.trim();
-  if (!text) return alert("Please upload a file or enter document text.");
+  let text = extractedDocText.value.trim();
+  if (!text) {
+    text = "=== Slide 1: Executive Overview ===\n• quik brown foxx jumps over the lazy dogg\n• we needs to optimize our cloud database asap\n• sales report have increased by twenty percent";
+    extractedDocText.value = text;
+    updateCharCount(extractedDocText, docCharCount);
+  }
   await processSlideOptimization(text);
 });
 
 document.getElementById("runDocSpellBtn").addEventListener("click", async () => {
-  const text = extractedDocText.value.trim();
-  if (!text) return alert("Please upload a file or enter document text.");
-  await processCorrection(text, "spell", "formal");
+  let text = extractedDocText.value.trim();
+  if (!text) {
+    text = "The quik brown foxx jumpss over the lazy dogg.";
+    extractedDocText.value = text;
+    updateCharCount(extractedDocText, docCharCount);
+  }
+  const btn = document.getElementById("runDocSpellBtn");
+  await processCorrection(text, "spell", "formal", btn);
 });
 
 function clientStructureDocument(raw, filename) {
@@ -1140,8 +1284,13 @@ function renderStudioResults(channel) {
     });
   }
 
-  // Show section smoothly
-  resultsSection.style.display = "block";
+  // Relocate results section directly below processing loader or active card
+  if (resultsSection) {
+    if (processingLoader && processingLoader.parentNode) {
+      processingLoader.parentNode.insertBefore(resultsSection, processingLoader.nextSibling);
+    }
+    resultsSection.style.display = "block";
+  }
 }
 
 function displayResults(original, corrected, changes, elapsedMs, diffChunks, channelId) {

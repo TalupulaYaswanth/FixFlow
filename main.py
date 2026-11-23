@@ -332,21 +332,30 @@ async def upload_file_endpoint(
             pass
 
     # Run multi-tier pipeline correction
-    if mode == "spell":
-        corrected, changes = dp_engine.correct_text(extracted_text)
-    elif mode == "grammar":
-        s_text, s_changes = dp_engine.correct_text(extracted_text)
-        corrected, g_changes = nlp_engine.fix_grammar(s_text)
-        changes = s_changes + g_changes
-    elif mode == "presentation" and file_type == "pptx":
-        corrected, changes = prompt_opt.optimize_presentation_slides(extracted_text)
-    else:
-        s_text, s_changes = dp_engine.correct_text(extracted_text)
-        corrected, t_changes = nlp_engine.polish_tone(s_text, target_tone=tone)
-        changes = s_changes + t_changes
+    # Note: To ensure upload responses are instantaneous (<1s) even for large multi-page PDFs,
+    # we correct an executive preview sample, leaving full document correction for studio action buttons.
+    corrected = extracted_text
+    changes = []
+    if mode != "none" and extracted_text and not extracted_text.startswith("["):
+        sample_to_correct = extracted_text[:2500]
+        if mode == "spell":
+            c_sample, changes = dp_engine.correct_text(sample_to_correct)
+            corrected = c_sample + extracted_text[2500:]
+        elif mode == "grammar":
+            s_text, s_changes = dp_engine.correct_text(sample_to_correct)
+            c_sample, g_changes = nlp_engine.fix_grammar(s_text)
+            changes = s_changes + g_changes
+            corrected = c_sample + extracted_text[2500:]
+        elif mode == "presentation" and file_type == "pptx":
+            corrected, changes = prompt_opt.optimize_presentation_slides(extracted_text)
+        else:
+            s_text, s_changes = dp_engine.correct_text(sample_to_correct)
+            c_sample, t_changes = nlp_engine.polish_tone(s_text, target_tone=tone)
+            changes = s_changes + t_changes
+            corrected = c_sample + extracted_text[2500:]
 
-    raw_diff = lcs_diff(extracted_text[:3000], corrected[:3000], mode="word")
-    edit_dist = levenshtein_distance(extracted_text[:1000], corrected[:1000])
+    raw_diff = lcs_diff(extracted_text[:2000], corrected[:2000], mode="word")
+    edit_dist = levenshtein_distance(extracted_text[:800], corrected[:800])
 
     return {
         "filename": file.filename,

@@ -85,24 +85,39 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     """
     Extracts text page-by-page from a PDF document using pypdf.
+    Includes fallback regex stream scanner for non-standard or compressed streams.
     """
-    import pypdf
-
-    reader = pypdf.PdfReader(io.BytesIO(file_bytes))
     pages_text = []
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+        for idx, page in enumerate(reader.pages, start=1):
+            try:
+                extracted = page.extract_text()
+                if extracted and extracted.strip():
+                    pages_text.append(f"--- Page {idx} ---\n{extracted.strip()}")
+            except Exception:
+                continue
+    except Exception as e:
+        pages_text = []
 
-    for idx, page in enumerate(reader.pages, start=1):
-        try:
-            extracted = page.extract_text()
-            if extracted and extracted.strip():
-                pages_text.append(f"--- Page {idx} ---\n{extracted.strip()}")
-        except Exception:
-            continue
+    if pages_text:
+        return "\n\n".join(pages_text)
 
-    if not pages_text:
-        return "[PDF Document loaded: No selectable text stream found. The PDF may contain scanned images rather than selectable text.]"
+    # Fallback: extract continuous printable text chunks from raw stream
+    import re
+    extracted_chunks = []
+    try:
+        for chunk in re.findall(rb'[\x20-\x7E\r\n]{5,}', file_bytes):
+            decoded = chunk.decode('latin-1', errors='ignore').strip()
+            if len(decoded) > 5 and not decoded.startswith(('obj', 'endobj', 'xref', 'trailer', 'startxref', 'stream', 'endstream')):
+                extracted_chunks.append(decoded)
+        if extracted_chunks:
+            return "\n".join(extracted_chunks[:250])
+    except Exception:
+        pass
 
-    return "\n\n".join(pages_text)
+    return "[PDF Document loaded: No selectable text stream found. The PDF may contain scanned images rather than selectable text.]"
 
 
 def parse_uploaded_file(file_name: str, file_bytes: bytes) -> Tuple[str, str, Dict[str, Any]]:

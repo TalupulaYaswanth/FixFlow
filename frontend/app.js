@@ -8,7 +8,10 @@ function resolveApiBase() {
     if (window.location.protocol === "file:") {
       return "http://127.0.0.1:8000";
     }
-    if (window.location.port === "3000" || window.location.port === "5500") {
+    // If running on localhost or 127.0.0.1 on any port other than 8000 (e.g. 5500, 5501, 3000, 8080, etc.)
+    const host = window.location.hostname;
+    const port = window.location.port;
+    if ((host === "localhost" || host === "127.0.0.1") && port !== "8000") {
       return "http://127.0.0.1:8000";
     }
   }
@@ -478,39 +481,244 @@ function handleFileSelected(file) {
   }
 }
 
+// ============================================================================
+// Client-Side Document Extraction Engines (Offline-First Support for PDF, DOCX, PPTX)
+// ============================================================================
+
+async function extractPdfClientSide(file) {
+  // 1. Try PDF.js if available
+  if (typeof pdfjsLib !== "undefined") {
+    try {
+      if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      const pageTexts = [];
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageLines = [];
+        let currentLine = "";
+        let lastY = null;
+
+        for (const item of textContent.items) {
+          if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+            if (currentLine.trim()) pageLines.push(currentLine.trim());
+            currentLine = item.str;
+          } else {
+            currentLine += (currentLine ? " " : "") + item.str;
+          }
+          lastY = item.transform[5];
+        }
+        if (currentLine.trim()) pageLines.push(currentLine.trim());
+
+        if (pageLines.length > 0) {
+          pageTexts.push(`--- Page ${i} ---\n` + pageLines.join("\n"));
+        }
+      }
+
+      if (pageTexts.length > 0) {
+        return pageTexts.join("\n\n");
+      }
+    } catch (pdfErr) {
+      console.warn("PDF.js extraction warning, falling back to stream scanner:", pdfErr);
+    }
+  }
+
+  // 2. Pure JavaScript Stream Decoder Fallback (Runs 100% offline with zero CDN dependencies)
+  return await extractPdfStreamFallback(file);
+}
+
+async function extractPdfStreamFallback(file) {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const decoder = new TextDecoder("latin1");
+  const raw = decoder.decode(bytes);
+
+  const extractedLines = [];
+  const btEtRegex = /BT[\s\S]*?ET/g;
+  let blockMatch;
+
+  while ((blockMatch = btEtRegex.exec(raw)) !== null) {
+    const block = blockMatch[0];
+    const tjRegex = /\(((?:\\.|[^\)])*)\)\s*Tj/g;
+    let m;
+    while ((m = tjRegex.exec(block)) !== null) {
+      const cleaned = m[1].replace(/\\([()\\])/g, "$1").trim();
+      if (cleaned) extractedLines.push(cleaned);
+    }
+    const tjArrayRegex = /\[(.*?)\]\s*TJ/g;
+    while ((m = tjArrayRegex.exec(block)) !== null) {
+      const inner = m[1];
+      const strRegex = /\(((?:\\.|[^\)])*)\)/g;
+      let sm;
+      let linePart = "";
+      while ((sm = strRegex.exec(inner)) !== null) {
+        linePart += sm[1].replace(/\\([()\\])/g, "$1");
+      }
+      if (linePart.trim()) extractedLines.push(linePart.trim());
+    }
+  }
+
+  if (extractedLines.length > 0) {
+    return extractedLines.join("\n");
+  }
+
+  // Continuous ASCII stream scanner fallback
+  const asciiLines = [];
+  const asciiRegex = /[\x20-\x7E\t\n\r]{6,}/g;
+  let am;
+  while ((am = asciiRegex.exec(raw)) !== null) {
+    const str = am[0].trim();
+    if (str.length > 8 && !str.startsWith("%PDF") && !str.startsWith("xref") && !str.startsWith("trailer") && !str.includes("FontName")) {
+      asciiLines.push(str);
+    }
+  }
+
+  if (asciiLines.length > 0) {
+    return asciiLines.slice(0, 300).join("\n");
+  }
+
+  return "";
+}
+
+async function extractDocxClientSide(file) {
+  if (typeof JSZip !== "undefined") {
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const docXml = await zip.file("word/document.xml")?.async("string");
+      if (docXml) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(docXml, "application/xml");
+        const paragraphs = xmlDoc.getElementsByTagName("w:p");
+        const textLines = [];
+        for (const p of paragraphs) {
+          const textNodes = p.getElementsByTagName("w:t");
+          let line = "";
+          for (const t of textNodes) {
+            line += t.textContent;
+          }
+          if (line.trim()) textLines.push(line.trim());
+        }
+        if (textLines.length > 0) return textLines.join("\n\n");
+      }
+    } catch (e) {
+      console.warn("Client DOCX extraction warning:", e);
+    }
+  }
+  return "";
+}
+
+async function extractPptxClientSide(file) {
+  if (typeof JSZip !== "undefined") {
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const slideFiles = Object.keys(zip.files).filter(k => k.match(/^ppt\/slides\/slide\d+\.xml$/));
+      slideFiles.sort((a, b) => {
+        const numA = parseInt(a.match(/\d+/)[0], 10);
+        const numB = parseInt(b.match(/\d+/)[0], 10);
+        return numA - numB;
+      });
+
+      const slidesOutput = [];
+      const parser = new DOMParser();
+
+      for (let idx = 0; idx < slideFiles.length; idx++) {
+        const xmlStr = await zip.file(slideFiles[idx]).async("string");
+        const xmlDoc = parser.parseFromString(xmlStr, "application/xml");
+        const textNodes = xmlDoc.getElementsByTagName("a:t");
+        const slideLines = [];
+        for (const t of textNodes) {
+          const val = t.textContent.trim();
+          if (val) slideLines.push(val);
+        }
+        const title = slideLines.length > 0 ? slideLines[0] : `Slide ${idx + 1}`;
+        const bullets = slideLines.slice(1).map(b => `• ${b}`).join("\n");
+        slidesOutput.push(`=== Slide ${idx + 1}: ${title} ===\n${bullets || "(No bullet text)"}`);
+      }
+
+      if (slidesOutput.length > 0) return slidesOutput.join("\n\n");
+    } catch (e) {
+      console.warn("Client PPTX extraction warning:", e);
+    }
+  }
+  return "";
+}
+
+function extractGenericFileText(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result || "");
+    reader.onerror = () => resolve("");
+    reader.readAsText(file);
+  });
+}
+
 async function uploadAndExtractFile(file) {
   extractedDocText.value = "Extracting structured text from document...";
-  showLoader("Parsing & Extracting Document Stream...", `Extracting slides, tables & paragraphs from ${file.name}...`, "File Parser Active", null);
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("mode", "spell");
+  showLoader("Parsing & Extracting Document Stream...", `Extracting text, slides & tables from ${file.name}...`, "File Parser Active", null);
 
-  try {
-    const res = await fetch(`${API_BASE}/upload-file`, {
-      method: "POST",
-      body: formData
-    });
-    if (!res.ok) {
-      let errDetail = `Server extraction error (${res.status})`;
-      try {
-        const errJson = await res.json();
-        if (errJson && errJson.detail) errDetail = errJson.detail;
-      } catch (e) {}
-      throw new Error(errDetail);
+  const ext = file.name.split('.').pop().toLowerCase();
+  let extracted = "";
+
+  // 1. If backend is online, attempt fast server extraction with strict 4.5s timeout
+  if (isBackendOnline) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("mode", "spell");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+    try {
+      const res = await fetch(`${API_BASE}/upload-file`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        extracted = data.extracted_text || "";
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.warn("Backend extraction failed or timed out, executing offline client parser:", err);
     }
-    const data = await res.json();
-    const extracted = data.extracted_text || "";
+  }
+
+  // 2. Client-Side Fallback Extraction (Works 100% offline for PDF, DOCX, PPTX, TXT)
+  if (!extracted || extracted.startsWith("[Could not")) {
+    try {
+      if (ext === "pdf") {
+        extracted = await extractPdfClientSide(file);
+      } else if (ext === "docx") {
+        extracted = await extractDocxClientSide(file);
+      } else if (ext === "pptx") {
+        extracted = await extractPptxClientSide(file);
+      } else {
+        extracted = await extractGenericFileText(file);
+      }
+    } catch (clientErr) {
+      console.error("Client document extraction error:", clientErr);
+    }
+  }
+
+  // 3. Finalize and update UI
+  await waitLoaderMinDuration();
+  hideLoader();
+
+  if (extracted && extracted.trim()) {
     extractedDocText.value = extracted;
     updateCharCount(extractedDocText, docCharCount);
     showToast(`Loaded ${file.name}`);
-  } catch (err) {
-    console.error("Extraction error:", err);
-    extractedDocText.value = `[Could not extract text from "${file.name}"]\nReason: ${err.message}\n\nPlease ensure your backend API is online and the document contains selectable text (.pptx, .docx, .pdf, or .txt).`;
+  } else {
+    extractedDocText.value = `[Document "${file.name}" loaded: No selectable text stream found. The document may be empty or contain scanned images without text layers.]`;
     updateCharCount(extractedDocText, docCharCount);
-    showToast(`Upload failed: ${err.message}`);
-  } finally {
-    await waitLoaderMinDuration();
-    hideLoader();
+    showToast(`Loaded ${file.name}`);
   }
 }
 

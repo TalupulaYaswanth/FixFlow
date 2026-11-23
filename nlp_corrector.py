@@ -413,3 +413,121 @@ class NLPCorrector:
                 continue
 
         return None
+
+    def structure_document(self, raw_text: str, filename: Optional[str] = None) -> Tuple[str, List[Dict]]:
+        """
+        Structures extracted document text using Google Gemini AI API if available,
+        otherwise falls back to rule-based document structuring heuristics.
+        """
+        if self.genai_client:
+            ai_res = self.structure_document_with_llm(raw_text, filename=filename)
+            if ai_res:
+                return ai_res
+
+        return self.structure_document_heuristics(raw_text, filename=filename)
+
+    def structure_document_with_llm(self, raw_text: str, filename: Optional[str] = None) -> Optional[Tuple[str, List[Dict]]]:
+        """
+        Uses Google GenAI SDK (Gemini) to convert raw, messy extracted document text
+        into a clean, professional, hierarchical structured document with headings,
+        bullet points, executive summaries, and markdown tables.
+        """
+        if not self.genai_client:
+            return None
+
+        doc_context = f"Document Filename: {filename}\n" if filename else ""
+        prompt = (
+            f"You are FixFlow Document AI Architect, an expert document structuring and extraction engine.\n"
+            f"{doc_context}"
+            f"Below is raw text extracted from a document (which may have messy line wraps, broken paragraphs, page headers/footers, or fragmented bullet points):\n\n"
+            f"--- RAW EXTRACTED TEXT ---\n"
+            f"{raw_text[:9000]}\n"
+            f"--- END RAW TEXT ---\n\n"
+            f"Instructions:\n"
+            f"1. Transform this text into a beautifully structured, highly readable Markdown document.\n"
+            f"2. Use clean hierarchical headings (# Document Title, ## Major Section, ### Subsection).\n"
+            f"3. Organize unstructured fragments and notes into clean, parallel bullet points (• ...).\n"
+            f"4. If there are key metrics, status reports, or tabular lists, format them as clean Markdown tables (| Item | Metric | Status |).\n"
+            f"5. Strip out PDF/OCR artifacts (like repeated 'Page X of Y', header stamps, trailing page numbers).\n"
+            f"6. Fix all spelling mistakes, typos, and broken words.\n"
+            f"7. Preserve ALL factual data, numerical values, technical names, dates, and locations with 100% fidelity.\n"
+            f"8. Output ONLY the clean structured Markdown document. Do not wrap in markdown code blocks (no ```markdown fences)."
+        )
+
+        for candidate_model in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            try:
+                response = self.genai_client.models.generate_content(
+                    model=candidate_model,
+                    contents=prompt
+                )
+                if response and response.text:
+                    structured = response.text.strip()
+                    if structured.startswith("```markdown"):
+                        structured = structured[len("```markdown"):].strip()
+                    elif structured.startswith("```"):
+                        structured = structured[3:].strip()
+                    if structured.endswith("```"):
+                        structured = structured[:-3].strip()
+
+                    changes = [{
+                        "rule": "AI Document Structuring",
+                        "original": "Raw document text stream",
+                        "replacement": f"Structured Markdown ({candidate_model})",
+                        "explanation": f"Restructured into clean sections, parallel bullets & tables using Gemini AI ({candidate_model})."
+                    }]
+                    return structured, changes
+            except Exception:
+                continue
+
+        return None
+
+    def structure_document_heuristics(self, raw_text: str, filename: Optional[str] = None) -> Tuple[str, List[Dict]]:
+        """
+        Rule-based document structuring fallback when AI API is unavailable.
+        """
+        import re
+        lines = raw_text.splitlines()
+        structured_lines = []
+        changes = []
+        doc_title_found = False
+
+        for line in lines:
+            trimmed = line.strip()
+            if not trimmed:
+                structured_lines.append("")
+                continue
+
+            # Strip page number banners
+            if re.match(r'^(page\s+\d+(\s+of\s+\d+)?|---\s*page\s+\d+\s*---)$', trimmed, re.I):
+                continue
+
+            # Detect title
+            if not doc_title_found and len(trimmed) < 80 and not trimmed.startswith(('•', '-', '*', '#')):
+                structured_lines.append(f"# {trimmed}")
+                doc_title_found = True
+                continue
+
+            # Detect section headings (numbered or short all-caps)
+            if re.match(r'^(\d+\.|\b[A-Z\s]{4,}\b$)', trimmed) and len(trimmed) < 70 and not trimmed.startswith(('•', '-', '*')):
+                clean_hd = trimmed.replace('#', '').strip()
+                structured_lines.append(f"\n## {clean_hd}")
+                continue
+
+            # Bullet points
+            if trimmed.startswith(('•', '-', '*', '>', '+')):
+                bullet_content = re.sub(r'^[•\-\*\>\+\s]+', '', trimmed).strip()
+                if bullet_content:
+                    bullet_content = bullet_content[0].upper() + bullet_content[1:]
+                    structured_lines.append(f"• {bullet_content}")
+                    continue
+
+            structured_lines.append(trimmed)
+
+        output = "\n".join(structured_lines).strip()
+        changes.append({
+            "rule": "Heuristic Document Structuring",
+            "original": "Raw stream",
+            "replacement": "Formatted Markdown",
+            "explanation": "Applied rule-based heading hierarchy, page noise reduction, and bullet formatting."
+        })
+        return output, changes

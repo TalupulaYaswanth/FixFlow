@@ -298,21 +298,38 @@ def optimize_ai_prompt_endpoint(payload: AIPromptOptimizeRequest):
     }
 
 
+class DocumentStructureRequest(BaseModel):
+    text: str = Field(..., description="Raw extracted document text to structure")
+    filename: Optional[str] = Field(None, description="Original document filename")
+
+
 @app.post("/upload-file", tags=["File Processing"])
 async def upload_file_endpoint(
     file: UploadFile = File(...),
     mode: str = Form("spell"),
-    tone: str = Form("formal")
+    tone: str = Form("formal"),
+    ai_structure: bool = Form(True)
 ):
     """
     Upload a file (.pptx, .docx, .pdf, .txt), extract its text, and return
-    both the extracted content and the FixFlow-corrected version.
+    both the extracted content (optionally AI-structured via Gemini) and the FixFlow-corrected version.
     """
     file_bytes = await file.read()
     try:
         extracted_text, file_type, metadata = parse_uploaded_file(file.filename, file_bytes)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"File parse error: {str(e)}")
+
+    # Apply AI document structuring if enabled
+    raw_extracted = extracted_text
+    if ai_structure and extracted_text and not extracted_text.startswith("["):
+        try:
+            structured_text, s_changes = nlp_engine.structure_document(extracted_text, filename=file.filename)
+            if structured_text and structured_text.strip():
+                extracted_text = structured_text
+                metadata["ai_structured"] = True
+        except Exception:
+            pass
 
     # Run multi-tier pipeline correction
     if mode == "spell":
@@ -335,11 +352,30 @@ async def upload_file_endpoint(
         "filename": file.filename,
         "file_type": file_type,
         "metadata": metadata,
+        "raw_extracted_text": raw_extracted,
         "extracted_text": extracted_text,
         "corrected_text": corrected,
         "diff_preview": [{"type": op, "text": val} for op, val in raw_diff],
         "total_edits": len(changes),
         "sample_edit_distance": edit_dist
+    }
+
+
+@app.post("/structure-document", tags=["File Processing"])
+async def structure_document_endpoint(payload: DocumentStructureRequest):
+    """
+    Transforms raw document text into clean, hierarchical Markdown with headings,
+    parallel bullets, and tables using Google Gemini AI API.
+    """
+    if not payload.text or not payload.text.strip():
+        raise HTTPException(status_code=400, detail="Empty text provided.")
+
+    structured_text, changes = nlp_engine.structure_document(payload.text, filename=payload.filename)
+    return {
+        "original_text": payload.text,
+        "structured_text": structured_text,
+        "changes": changes,
+        "ai_powered": nlp_engine.genai_client is not None
     }
 
 

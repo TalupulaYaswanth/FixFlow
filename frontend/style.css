@@ -2837,4 +2837,36 @@ body.no-grid {
   vertical-align: middle;
 }
 
+/* AI Structure Toggle */
+.ai-structure-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(var(--accent-primary-rgb, 0, 240, 255), 0.1);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  user-select: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ai-structure-toggle:hover {
+  background: rgba(var(--accent-primary-rgb, 0, 240, 255), 0.18);
+  box-shadow: 0 0 12px rgba(var(--accent-primary-rgb, 0, 240, 255), 0.25);
+}
+
+.ai-structure-toggle input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+
 

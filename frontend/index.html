@@ -222,6 +222,10 @@
                 <div class="panel-title"><span>📊</span> Presentation (PPTX) & Document Studio</div>
                 <div class="panel-caption">Upload slide decks or documents to parse, extract, and optimize slide-by-slide or section-by-section.</div>
               </div>
+              <label class="ai-structure-toggle" title="Use Google Gemini AI API to structure raw document text into clean headings, sections & tables">
+                <input type="checkbox" id="aiStructureCheckbox" checked>
+                <span>✨ AI Document Structuring</span>
+              </label>
             </div>
 
             <!-- Drag & Drop Zone -->
@@ -260,12 +264,15 @@
               </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-              <button class="btn-primary" id="runSlideFixBtn">
-                <span>🚀</span> Polish Slides (Executive Style)
+            <div style="display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 12px;">
+              <button class="btn-primary" id="runAiDocStructureBtn" style="background: var(--accent-gradient);">
+                <span>✨</span> AI Structure & Format Document
+              </button>
+              <button class="btn-secondary" id="runSlideFixBtn">
+                <span>🚀</span> Polish Slides
               </button>
               <button class="btn-secondary" id="runDocSpellBtn">
-                <span>⚡</span> Run DP Spell Check Only
+                <span>⚡</span> DP Spell Check
               </button>
             </div>
           </div>

@@ -664,14 +664,18 @@ async function uploadAndExtractFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   let extracted = "";
 
-  // 1. If backend is online, attempt fast server extraction with strict 4.5s timeout
+  // 1. If backend is online, attempt fast server extraction with strict 5.5s timeout
   if (isBackendOnline) {
+    const aiStructureCheckbox = document.getElementById("aiStructureCheckbox");
+    const shouldAiStructure = aiStructureCheckbox ? aiStructureCheckbox.checked : true;
+
     const formData = new FormData();
     formData.append("file", file);
     formData.append("mode", "spell");
+    formData.append("ai_structure", shouldAiStructure ? "true" : "false");
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    const timeoutId = setTimeout(() => controller.abort(), 6500);
 
     try {
       const res = await fetch(`${API_BASE}/upload-file`, {
@@ -701,6 +705,12 @@ async function uploadAndExtractFile(file) {
         extracted = await extractPptxClientSide(file);
       } else {
         extracted = await extractGenericFileText(file);
+      }
+
+      // If AI structuring toggle is enabled, structure client-side as well
+      const aiStructureCheckbox = document.getElementById("aiStructureCheckbox");
+      if (aiStructureCheckbox && aiStructureCheckbox.checked && extracted && !extracted.startsWith("[")) {
+        extracted = clientStructureDocument(extracted, file.name);
       }
     } catch (clientErr) {
       console.error("Client document extraction error:", clientErr);
@@ -746,6 +756,16 @@ document.getElementById("runDirectBtn").addEventListener("click", async () => {
 });
 
 // 2. Slide / Doc Run
+const runAiDocStructureBtn = document.getElementById("runAiDocStructureBtn");
+if (runAiDocStructureBtn) {
+  runAiDocStructureBtn.addEventListener("click", async () => {
+    const text = extractedDocText.value.trim();
+    if (!text) return alert("Please upload a file or enter document text to structure.");
+    const fname = selectedFile ? selectedFile.name : "Document";
+    await processDocumentAiStructuring(text, fname);
+  });
+}
+
 document.getElementById("runSlideFixBtn").addEventListener("click", async () => {
   const text = extractedDocText.value.trim();
   if (!text) return alert("Please upload a file or enter document text.");
@@ -757,6 +777,83 @@ document.getElementById("runDocSpellBtn").addEventListener("click", async () => 
   if (!text) return alert("Please upload a file or enter document text.");
   await processCorrection(text, "spell", "formal");
 });
+
+function clientStructureDocument(raw, filename) {
+  const lines = raw.split("\n");
+  const result = [];
+  let titleFound = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) {
+      result.push("");
+      continue;
+    }
+    // Filter noise
+    if (trimmed.match(/^(page\s+\d+(\s+of\s+\d+)?|---\s*page\s+\d+\s*---)$/i)) {
+      continue;
+    }
+    // Detect Document Title
+    if (!titleFound && trimmed.length < 80 && !trimmed.startsWith("#") && !trimmed.startsWith("•") && !trimmed.startsWith("-")) {
+      result.push(`# ${trimmed}\n`);
+      titleFound = true;
+      continue;
+    }
+    // Detect Headings (e.g., numbered like 1. Incident, or short uppercase)
+    if (trimmed.match(/^(\d+\.|\b[A-Z\s]{4,}\b$)/) && trimmed.length < 65 && !trimmed.startsWith("•") && !trimmed.startsWith("-")) {
+      result.push(`\n## ${trimmed.replace(/^#+\s*/, "")}\n`);
+      continue;
+    }
+    // Bullet formatting
+    if (trimmed.startsWith("•") || trimmed.startsWith("-") || trimmed.startsWith("*") || trimmed.startsWith(">")) {
+      let b = trimmed.replace(/^[•\-\*\>\s]+/, "").trim();
+      if (b.length > 0) b = b[0].toUpperCase() + b.slice(1);
+      result.push(`• ${b}`);
+      continue;
+    }
+    result.push(trimmed);
+  }
+  return result.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+async function processDocumentAiStructuring(text, filename) {
+  const triggerBtn = document.getElementById("runAiDocStructureBtn");
+  showLoader("Structuring Document via Gemini AI API...", "Extracting sections, hierarchical headings, key metrics & tables...", "AI Architect Active", triggerBtn);
+  const t0 = performance.now();
+  let structuredText = "";
+  let changes = [];
+
+  try {
+    const res = await fetch(`${API_BASE}/structure-document`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, filename })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      structuredText = data.structured_text;
+      changes = data.changes || [];
+    } else {
+      throw new Error("API error");
+    }
+  } catch (err) {
+    // Client-side heuristic structuring fallback
+    structuredText = clientStructureDocument(text, filename);
+    changes.push({
+      rule: "Heuristic Document Structuring",
+      original: "Raw unstructured stream",
+      replacement: "Structured Markdown Document",
+      explanation: "Organized sections, titles, bullets, and tables using local heuristic rules."
+    });
+  }
+
+  const elapsed = (performance.now() - t0).toFixed(1);
+  await waitLoaderMinDuration();
+  extractedDocText.value = structuredText;
+  updateCharCount(extractedDocText, docCharCount);
+  displayResults(text, structuredText, changes, elapsed, null, "files");
+  showToast("✨ Document structured with Gemini AI!");
+}
 
 // 3. Email Run
 document.getElementById("runEmailBtn").addEventListener("click", async () => {

@@ -10,6 +10,11 @@
 </head>
 <body>
 
+  <!-- Top Global Ambient Laser Progress Bar -->
+  <div class="global-progress-bar" id="globalProgressBar" style="display: none;">
+    <div class="progress-bar-fill"></div>
+  </div>
+
   <!-- ======================================================================
        MAIN APPLICATION LAYOUT WITH COLLAPSIBLE SIDEBAR
        ====================================================================== -->
@@ -198,11 +203,17 @@
               </div>
             </div>
 
-            <div class="textarea-wrap">
+            <div class="textarea-wrap" id="directTextareaWrap">
               <textarea id="directInputText" class="code-textarea" rows="5" placeholder="Type or paste any text to correct with FixFlow..."></textarea>
               <div class="textarea-footer">
                 <span id="directCharCount">0 characters • 0 words</span>
                 <span>Dynamic Programming ($O(\min(m, n))$ space complexity)</span>
+              </div>
+              <div class="textarea-loading-overlay" id="directLoadingOverlay" style="display: none;">
+                <div class="textarea-loader-badge">
+                  <div class="loader-spinner-outer" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                  <span id="directOverlayText">⚡ Executing DP Levenshtein & Viterbi HMM lattice...</span>
+                </div>
               </div>
             </div>
 
@@ -246,21 +257,39 @@
             <div class="file-info-card" id="fileInfoCard">
               <div class="file-info-left">
                 <div class="file-icon-box" id="fileTypeIcon">📑</div>
-                <div>
+                <div class="file-info-details">
                   <div style="font-weight: 700;" id="fileNameDisplay">document.pptx</div>
                   <div style="font-size: 0.8rem; color: var(--text-muted);" id="fileMetaDisplay">PowerPoint Deck • 12 Slides</div>
+                  <div class="file-progress-wrap" id="fileProgressWrap" style="display: none;">
+                    <div class="file-progress-track">
+                      <div class="file-progress-fill" id="fileProgressFill"></div>
+                    </div>
+                    <div class="file-progress-label" id="fileProgressLabel">⚡ Extracting text streams...</div>
+                  </div>
                 </div>
               </div>
-              <button class="btn-ghost" id="removeFileBtn" style="color: var(--accent-red);">✕ Remove</button>
+              <div class="file-info-right" style="display: flex; align-items: center; gap: 10px;">
+                <div class="file-status-badge" id="fileStatusBadge" style="display: none;">
+                  <span class="btn-spinner" style="width: 14px; height: 14px; margin-right: 6px;"></span>
+                  <span id="fileStatusText">Extracting...</span>
+                </div>
+                <button class="btn-ghost" id="removeFileBtn" style="color: var(--accent-red);">✕ Remove</button>
+              </div>
             </div>
 
             <!-- Extracted Text Area -->
-            <div class="textarea-wrap">
+            <div class="textarea-wrap" id="docTextareaWrap">
               <label class="control-label" style="margin-bottom: 6px; display: block;">Extracted Document Text (Editable Preview):</label>
               <textarea id="extractedDocText" class="code-textarea" rows="7" placeholder="Upload a document above or paste slide bullet points here (e.g. • quik brown fox)..."></textarea>
               <div class="textarea-footer">
                 <span id="docCharCount">0 characters • 0 words</span>
                 <span>Executive Parallel Bullet Formatting</span>
+              </div>
+              <div class="textarea-loading-overlay" id="docLoadingOverlay" style="display: none;">
+                <div class="textarea-loader-badge">
+                  <div class="loader-spinner-outer" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                  <span id="docOverlayText">⚡ Parsing document streams & applying AI structure...</span>
+                </div>
               </div>
             </div>
 
@@ -306,9 +335,15 @@
               </div>
             </div>
 
-            <div class="textarea-wrap">
+            <div class="textarea-wrap" id="emailTextareaWrap">
               <label class="control-label" style="margin-bottom: 6px; display: block;">Email Body Content</label>
               <textarea id="emailBody" class="code-textarea" rows="6" placeholder="Write or paste your email body draft here..."></textarea>
+              <div class="textarea-loading-overlay" id="emailLoadingOverlay" style="display: none;">
+                <div class="textarea-loader-badge">
+                  <div class="loader-spinner-outer" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                  <span>⚡ Polishing & formatting executive email...</span>
+                </div>
+              </div>
             </div>
 
             <div class="control-group" style="margin-bottom: 20px;">
@@ -349,9 +384,15 @@
               </select>
             </div>
 
-            <div class="textarea-wrap">
+            <div class="textarea-wrap" id="promptTextareaWrap">
               <label class="control-label" style="margin-bottom: 6px; display: block;">Raw Prompt Idea</label>
               <textarea id="rawPromptInput" class="code-textarea" rows="5" placeholder="Enter your raw prompt idea (e.g. write a python script to calculate levenshtein distance with dynamic programing)..."></textarea>
+              <div class="textarea-loading-overlay" id="promptLoadingOverlay" style="display: none;">
+                <div class="textarea-loader-badge">
+                  <div class="loader-spinner-outer" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                  <span>⚡ Architecting structured AI prompt system...</span>
+                </div>
+              </div>
             </div>
 
             <button class="btn-primary" id="runPromptBtn">

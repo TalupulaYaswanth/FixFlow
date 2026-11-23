@@ -79,11 +79,30 @@ const STUDIO_RESULT_HEADINGS = {
   prompt: { icon: "🤖", title: "AI Prompt Optimization Results" }
 };
 
+// Loading Animation & Overlay Elements
+const globalProgressBar = document.getElementById("globalProgressBar");
+const directLoadingOverlay = document.getElementById("directLoadingOverlay");
+const docLoadingOverlay = document.getElementById("docLoadingOverlay");
+const emailLoadingOverlay = document.getElementById("emailLoadingOverlay");
+const promptLoadingOverlay = document.getElementById("promptLoadingOverlay");
+const fileProgressWrap = document.getElementById("fileProgressWrap");
+const fileStatusBadge = document.getElementById("fileStatusBadge");
+
 function showLoader(headline, subtitle, stepText, triggerBtn) {
   if (resultsSection) resultsSection.style.display = "none";
   loaderStartTime = performance.now();
   if (loaderStageInterval) clearInterval(loaderStageInterval);
 
+  // 1. Top Global Ambient Progress Bar
+  if (globalProgressBar) globalProgressBar.style.display = "block";
+
+  // 2. Active Textarea Loading Overlay
+  if (currentPageId === "direct" && directLoadingOverlay) directLoadingOverlay.style.display = "flex";
+  if (currentPageId === "files" && docLoadingOverlay) docLoadingOverlay.style.display = "flex";
+  if (currentPageId === "email" && emailLoadingOverlay) emailLoadingOverlay.style.display = "flex";
+  if (currentPageId === "prompt" && promptLoadingOverlay) promptLoadingOverlay.style.display = "flex";
+
+  // 3. Processing Loader Card
   if (processingLoader) {
     if (loaderTitle && headline) loaderTitle.textContent = headline;
     if (loaderSubtitle && subtitle) loaderSubtitle.textContent = subtitle;
@@ -92,6 +111,7 @@ function showLoader(headline, subtitle, stepText, triggerBtn) {
     processingLoader.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
+  // 4. Trigger Button Spinner State
   if (triggerBtn) {
     activeProcessingBtn = triggerBtn;
     originalBtnHtml = triggerBtn.innerHTML;
@@ -121,9 +141,27 @@ function hideLoader() {
     clearInterval(loaderStageInterval);
     loaderStageInterval = null;
   }
+
+  // 1. Top Global Ambient Progress Bar
+  if (globalProgressBar) globalProgressBar.style.display = "none";
+
+  // 2. Hide all In-Textarea Overlays
+  if (directLoadingOverlay) directLoadingOverlay.style.display = "none";
+  if (docLoadingOverlay) docLoadingOverlay.style.display = "none";
+  if (emailLoadingOverlay) emailLoadingOverlay.style.display = "none";
+  if (promptLoadingOverlay) promptLoadingOverlay.style.display = "none";
+
+  // 3. Ingestion states in file studio
+  if (fileDropzone) fileDropzone.classList.remove("is-extracting");
+  if (fileProgressWrap) fileProgressWrap.style.display = "none";
+  if (fileStatusBadge) fileStatusBadge.style.display = "none";
+
+  // 4. Processing Loader Card
   if (processingLoader) {
     processingLoader.style.display = "none";
   }
+
+  // 5. Reset Active Button State
   if (activeProcessingBtn) {
     activeProcessingBtn.disabled = false;
     activeProcessingBtn.classList.remove("is-loading");
@@ -659,6 +697,13 @@ function extractGenericFileText(file) {
 
 async function uploadAndExtractFile(file) {
   extractedDocText.value = "Extracting structured text from document...";
+
+  // Activate File Loading UI/UX components
+  if (fileDropzone) fileDropzone.classList.add("is-extracting");
+  if (fileProgressWrap) fileProgressWrap.style.display = "block";
+  if (fileStatusBadge) fileStatusBadge.style.display = "inline-flex";
+  if (docLoadingOverlay) docLoadingOverlay.style.display = "flex";
+
   showLoader("Parsing & Extracting Document Stream...", `Extracting text, slides & tables from ${file.name}...`, "File Parser Active", null);
 
   const ext = file.name.split('.').pop().toLowerCase();

@@ -57,9 +57,30 @@ const loaderStepBadge = document.getElementById("loaderStepBadge");
 
 let activeProcessingBtn = null;
 let originalBtnHtml = "";
+let loaderStageInterval = null;
+let loaderStartTime = 0;
+const MIN_LOADER_DURATION_MS = 600;
+
+// Linguistic Studio Isolated Results State
+const studioResults = {
+  direct: null,
+  files: null,
+  email: null,
+  prompt: null
+};
+
+const STUDIO_RESULT_HEADINGS = {
+  direct: { icon: "✍️", title: "Text Studio Results & Visual Diff" },
+  files: { icon: "📊", title: "Presentation & Document Results" },
+  email: { icon: "📧", title: "Executive Email Results & Diff" },
+  prompt: { icon: "🤖", title: "AI Prompt Optimization Results" }
+};
 
 function showLoader(headline, subtitle, stepText, triggerBtn) {
   if (resultsSection) resultsSection.style.display = "none";
+  loaderStartTime = performance.now();
+  if (loaderStageInterval) clearInterval(loaderStageInterval);
+
   if (processingLoader) {
     if (loaderTitle && headline) loaderTitle.textContent = headline;
     if (loaderSubtitle && subtitle) loaderSubtitle.textContent = subtitle;
@@ -75,9 +96,28 @@ function showLoader(headline, subtitle, stepText, triggerBtn) {
     triggerBtn.classList.add("is-loading");
     triggerBtn.innerHTML = `<span class="btn-spinner"></span> <span>Running FixFlow Engine...</span>`;
   }
+
+  // Progressive real-time computational pipeline telemetry
+  const stages = [
+    { sub: "Computing Space-Optimized Levenshtein Matrix & Edit Paths...", badge: "DP Matrix Active" },
+    { sub: "Evaluating Viterbi Bigram Probability Lattice & Context...", badge: "Viterbi HMM Active" },
+    { sub: "Synthesizing LCS Character-Level Diff & Metric Telemetry...", badge: "Synthesizing Diff" }
+  ];
+  let stageIdx = 0;
+  loaderStageInterval = setInterval(() => {
+    stageIdx++;
+    if (stageIdx < stages.length) {
+      if (loaderSubtitle) loaderSubtitle.textContent = stages[stageIdx].sub;
+      if (loaderStepBadge) loaderStepBadge.textContent = stages[stageIdx].badge;
+    }
+  }, 200);
 }
 
 function hideLoader() {
+  if (loaderStageInterval) {
+    clearInterval(loaderStageInterval);
+    loaderStageInterval = null;
+  }
   if (processingLoader) {
     processingLoader.style.display = "none";
   }
@@ -86,6 +126,13 @@ function hideLoader() {
     activeProcessingBtn.classList.remove("is-loading");
     if (originalBtnHtml) activeProcessingBtn.innerHTML = originalBtnHtml;
     activeProcessingBtn = null;
+  }
+}
+
+async function waitLoaderMinDuration() {
+  const elapsed = performance.now() - loaderStartTime;
+  if (elapsed < MIN_LOADER_DURATION_MS) {
+    await new Promise(r => setTimeout(r, MIN_LOADER_DURATION_MS - elapsed));
   }
 }
 
@@ -191,8 +238,18 @@ function switchPage(pageId) {
     syncProfileUI();
   }
 
-  // Hide common results section when navigating to utility pages
-  if (["matrix", "history", "theme", "profile"].includes(pageId)) {
+  // Reset loader if page switch happens mid-flight
+  hideLoader();
+
+  // Results isolation per studio channel:
+  if (linguisticChannels.includes(pageId)) {
+    if (studioResults[pageId]) {
+      renderStudioResults(pageId);
+    } else {
+      if (resultsSection) resultsSection.style.display = "none";
+    }
+  } else {
+    // Utility pages (matrix, history, theme, profile)
     if (resultsSection) resultsSection.style.display = "none";
   }
 
@@ -423,6 +480,7 @@ function handleFileSelected(file) {
 
 async function uploadAndExtractFile(file) {
   extractedDocText.value = "Extracting structured text from document...";
+  showLoader("Parsing & Extracting Document Stream...", `Extracting slides, tables & paragraphs from ${file.name}...`, "File Parser Active", null);
   const formData = new FormData();
   formData.append("file", file);
   formData.append("mode", "spell");
@@ -450,6 +508,9 @@ async function uploadAndExtractFile(file) {
     extractedDocText.value = `[Could not extract text from "${file.name}"]\nReason: ${err.message}\n\nPlease ensure your backend API is online and the document contains selectable text (.pptx, .docx, .pdf, or .txt).`;
     updateCharCount(extractedDocText, docCharCount);
     showToast(`Upload failed: ${err.message}`);
+  } finally {
+    await waitLoaderMinDuration();
+    hideLoader();
   }
 }
 
@@ -545,7 +606,8 @@ async function processCorrection(text, mode, tone, customTriggerBtn) {
   }
 
   const elapsed = (performance.now() - t0).toFixed(1);
-  displayResults(text, corrected, changes, elapsed, diff);
+  await waitLoaderMinDuration();
+  displayResults(text, corrected, changes, elapsed, diff, currentPageId === "files" ? "files" : "direct");
 }
 
 async function processEmailOptimization(payload) {
@@ -578,7 +640,8 @@ async function processEmailOptimization(payload) {
   }
 
   const elapsed = (performance.now() - t0).toFixed(1);
-  displayResults(rawFull, correctedFull, changes, elapsed);
+  await waitLoaderMinDuration();
+  displayResults(rawFull, correctedFull, changes, elapsed, null, "email");
 }
 
 async function processPromptOptimization(rawPrompt, targetModel) {
@@ -623,7 +686,8 @@ ${grammarFixed}
   }
 
   const elapsed = (performance.now() - t0).toFixed(1);
-  displayResults(rawPrompt, structuredPrompt, changes, elapsed);
+  await waitLoaderMinDuration();
+  displayResults(rawPrompt, structuredPrompt, changes, elapsed, null, "prompt");
 }
 
 async function processSlideOptimization(text) {
@@ -652,32 +716,45 @@ async function processSlideOptimization(text) {
 
   const finalOutput = polished.join("\n");
   const elapsed = (performance.now() - t0).toFixed(1);
-  displayResults(text, finalOutput, changes, elapsed);
+  await waitLoaderMinDuration();
+  displayResults(text, finalOutput, changes, elapsed, null, "files");
 }
 
 // ============================================================================
-// 8. Results Display & LCS Diff Rendering
+// 8. Results Display & LCS Diff Rendering (Studio Isolated)
 // ============================================================================
-function displayResults(original, corrected, changes, elapsedMs, diffChunks) {
-  hideLoader();
-  lastCorrectedOutput = corrected;
+function renderStudioResults(channel) {
+  const data = studioResults[channel];
+  if (!data) {
+    if (resultsSection) resultsSection.style.display = "none";
+    return;
+  }
+
+  lastCorrectedOutput = data.corrected;
+
+  // Update Section Header based on studio channel
+  const titleInfo = STUDIO_RESULT_HEADINGS[channel] || { icon: "📊", title: "Correction Results & Visual Diff" };
+  const panelTitleEl = resultsSection ? resultsSection.querySelector(".panel-title") : null;
+  if (panelTitleEl) {
+    panelTitleEl.innerHTML = `<span>${titleInfo.icon}</span> ${titleInfo.title}`;
+  }
 
   // Render text boxes
-  originalTextDisplay.textContent = original;
-  correctedTextDisplay.textContent = corrected;
-  origCharCount.textContent = `${original.length} chars`;
-  corrCharCount.textContent = `${corrected.length} chars`;
+  originalTextDisplay.textContent = data.original;
+  correctedTextDisplay.textContent = data.corrected;
+  origCharCount.textContent = `${data.original.length} chars`;
+  corrCharCount.textContent = `${data.corrected.length} chars`;
 
   // Render metrics
-  metricLatency.textContent = `${elapsedMs}ms`;
-  metricEdits.textContent = changes.length;
-  metricDistance.textContent = levenshtein(original, corrected);
-  const origWords = original.trim().split(/\s+/).filter(Boolean).length;
-  const corrWords = corrected.trim().split(/\s+/).filter(Boolean).length;
+  metricLatency.textContent = `${data.elapsedMs}ms`;
+  metricEdits.textContent = data.changes.length;
+  metricDistance.textContent = levenshtein(data.original, data.corrected);
+  const origWords = data.original.trim().split(/\s+/).filter(Boolean).length;
+  const corrWords = data.corrected.trim().split(/\s+/).filter(Boolean).length;
   metricWords.textContent = `${origWords} → ${corrWords}`;
 
   // Render Visual Diff
-  const chunks = diffChunks || computeLCSDiff(original, corrected);
+  const chunks = data.diffChunks || computeLCSDiff(data.original, data.corrected);
   let diffHtml = "";
   for (const c of chunks) {
     const safeText = escapeHtml(c.text).replace(/\n/g, "<br>");
@@ -692,12 +769,12 @@ function displayResults(original, corrected, changes, elapsedMs, diffChunks) {
   diffVisualView.innerHTML = diffHtml;
 
   // Render changes log
-  changesCount.textContent = changes.length;
+  changesCount.textContent = data.changes.length;
   changesListContainer.innerHTML = "";
-  if (changes.length === 0) {
+  if (data.changes.length === 0) {
     changesListContainer.innerHTML = `<div style="color: var(--text-dim); padding: 8px;">No changes required; text is already optimal!</div>`;
   } else {
-    changes.forEach(c => {
+    data.changes.forEach(c => {
       const orig = escapeHtml(c.original || "");
       const rep = escapeHtml(c.replacement || "");
       const reason = escapeHtml(c.explanation || c.type || "Adjustment");
@@ -713,11 +790,33 @@ function displayResults(original, corrected, changes, elapsedMs, diffChunks) {
     });
   }
 
+  // Show section smoothly
+  resultsSection.style.display = "block";
+}
+
+function displayResults(original, corrected, changes, elapsedMs, diffChunks, channelId) {
+  hideLoader();
+  const channel = channelId || currentPageId || "direct";
+  const chunks = diffChunks || computeLCSDiff(original, corrected);
+
+  // Store in isolated studio cache
+  studioResults[channel] = {
+    original: original,
+    corrected: corrected,
+    changes: changes,
+    elapsedMs: elapsedMs,
+    diffChunks: chunks
+  };
+
+  // Render results for this studio
+  renderStudioResults(channel);
+  resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+
   // Auto-record into audit history if enabled
   if (typeof recordAuditHistory === "function" && profileState && profileState.autoSaveHistory) {
     recordAuditHistory({
-      channel: currentPageId,
-      channelLabel: PAGE_TITLES[currentPageId] || "Text Studio",
+      channel: channel,
+      channelLabel: PAGE_TITLES[channel] || "Text Studio",
       original: original,
       corrected: corrected,
       changesCount: changes.length,
@@ -725,10 +824,17 @@ function displayResults(original, corrected, changes, elapsedMs, diffChunks) {
       latency: elapsedMs
     });
   }
+}
 
-  // Show section smoothly
-  resultsSection.style.display = "block";
-  resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+// Clear Results Button per Studio
+const clearStudioResultBtn = document.getElementById("clearStudioResultBtn");
+if (clearStudioResultBtn) {
+  clearStudioResultBtn.addEventListener("click", () => {
+    studioResults[currentPageId] = null;
+    lastCorrectedOutput = "";
+    if (resultsSection) resultsSection.style.display = "none";
+    showToast(`Cleared ${PAGE_TITLES[currentPageId] || "studio"} results`);
+  });
 }
 
 // Copy & Download
@@ -2000,6 +2106,12 @@ function startNewConversation() {
   if (typeof removeFileBtn !== "undefined" && removeFileBtn) {
     try { removeFileBtn.click(); } catch (e) {}
   }
+
+  // Reset all studio isolated results
+  studioResults.direct = null;
+  studioResults.files = null;
+  studioResults.email = null;
+  studioResults.prompt = null;
 
   // Reset Results & Loader View
   hideLoader();

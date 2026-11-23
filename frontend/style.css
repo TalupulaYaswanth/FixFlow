@@ -2789,7 +2789,7 @@ body.no-grid {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(var(--accent-primary-rgb), 0.12);
+  background: rgba(var(--accent-primary-rgb, 0, 240, 255), 0.12);
   border: 1px solid var(--border-glow);
   border-radius: var(--radius-full);
   padding: 6px 14px;

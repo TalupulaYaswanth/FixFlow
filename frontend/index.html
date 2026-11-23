@@ -354,6 +354,30 @@
         </section>
 
         <!-- ==================================================================
+             REAL-TIME COMPUTATIONAL LOADING ANIMATION
+             ================================================================== -->
+        <div class="processing-loader-container" id="processingLoader" style="display: none;">
+          <div class="loader-card">
+            <div class="loader-core">
+              <div class="loader-spinner-outer"></div>
+              <div class="loader-spinner-inner"></div>
+              <div class="loader-center-badge">⚡</div>
+            </div>
+            <div class="loader-info">
+              <div class="loader-headline" id="loaderTitle">Executing FixFlow Dynamic Programming Engine...</div>
+              <div class="loader-status-stream" id="loaderSubtitle">Computing Space-Optimized Levenshtein Distance & Token Alignments...</div>
+              <div class="loader-track">
+                <div class="loader-shimmer"></div>
+              </div>
+            </div>
+            <div class="loader-badge-indicator">
+              <span class="live-pulse-dot"></span>
+              <span id="loaderStepBadge">DP Convergence in Progress</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==================================================================
              COMMON RESULTS & DIFF SECTION (Appears across text/file/email/prompt)
              ================================================================== -->
         <section class="results-container" id="resultsSection">

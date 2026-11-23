@@ -49,6 +49,46 @@ const copyResultBtn = document.getElementById("copyResultBtn");
 const downloadResultBtn = document.getElementById("downloadResultBtn");
 const toastNotice = document.getElementById("toastNotice");
 
+// Loading Animation Elements
+const processingLoader = document.getElementById("processingLoader");
+const loaderTitle = document.getElementById("loaderTitle");
+const loaderSubtitle = document.getElementById("loaderSubtitle");
+const loaderStepBadge = document.getElementById("loaderStepBadge");
+
+let activeProcessingBtn = null;
+let originalBtnHtml = "";
+
+function showLoader(headline, subtitle, stepText, triggerBtn) {
+  if (resultsSection) resultsSection.style.display = "none";
+  if (processingLoader) {
+    if (loaderTitle && headline) loaderTitle.textContent = headline;
+    if (loaderSubtitle && subtitle) loaderSubtitle.textContent = subtitle;
+    if (loaderStepBadge && stepText) loaderStepBadge.textContent = stepText;
+    processingLoader.style.display = "block";
+    processingLoader.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  if (triggerBtn) {
+    activeProcessingBtn = triggerBtn;
+    originalBtnHtml = triggerBtn.innerHTML;
+    triggerBtn.disabled = true;
+    triggerBtn.classList.add("is-loading");
+    triggerBtn.innerHTML = `<span class="btn-spinner"></span> <span>Running FixFlow Engine...</span>`;
+  }
+}
+
+function hideLoader() {
+  if (processingLoader) {
+    processingLoader.style.display = "none";
+  }
+  if (activeProcessingBtn) {
+    activeProcessingBtn.disabled = false;
+    activeProcessingBtn.classList.remove("is-loading");
+    if (originalBtnHtml) activeProcessingBtn.innerHTML = originalBtnHtml;
+    activeProcessingBtn = null;
+  }
+}
+
 let lastCorrectedOutput = "";
 
 // ============================================================================
@@ -475,7 +515,9 @@ document.getElementById("runPromptBtn").addEventListener("click", async () => {
 // 7. Processing Handlers (API with Client DP Fallback)
 // ============================================================================
 
-async function processCorrection(text, mode, tone) {
+async function processCorrection(text, mode, tone, customTriggerBtn) {
+  const triggerBtn = customTriggerBtn || (currentPageId === "files" ? document.getElementById("runDocSpellBtn") : document.getElementById("runDirectBtn"));
+  showLoader("Executing FixFlow Dynamic Programming Engine...", "Computing Levenshtein distance, LCS visual diff & grammar heuristics...", "DP Convergence Active", triggerBtn);
   const t0 = performance.now();
   let corrected = text;
   let changes = [];
@@ -507,6 +549,8 @@ async function processCorrection(text, mode, tone) {
 }
 
 async function processEmailOptimization(payload) {
+  const triggerBtn = document.getElementById("runEmailBtn");
+  showLoader("Polishing & Formatting Executive Email...", "Assembling subject, salutation, body, and sign-off tone profile...", "Email Polish Active", triggerBtn);
   const t0 = performance.now();
   const rawFull = `Subject: ${payload.subject}\n\n${payload.salutation}\n\n${payload.body}\n\n${payload.signoff}`;
   let correctedFull = rawFull;
@@ -538,6 +582,8 @@ async function processEmailOptimization(payload) {
 }
 
 async function processPromptOptimization(rawPrompt, targetModel) {
+  const triggerBtn = document.getElementById("runPromptBtn");
+  showLoader("Architecting Structured AI Prompt...", `Configuring Role, Objectives & Constraints for ${targetModel}...`, "Prompt Engineering Active", triggerBtn);
   const t0 = performance.now();
   let structuredPrompt = "";
   let changes = [];
@@ -581,6 +627,8 @@ ${grammarFixed}
 }
 
 async function processSlideOptimization(text) {
+  const triggerBtn = document.getElementById("runSlideFixBtn");
+  showLoader("Formatting Presentation Slides & Bullets...", "Extracting parallel bullet structures & applying conciseness rules...", "Slide Polish Active", triggerBtn);
   const t0 = performance.now();
   const lines = text.split("\n");
   const polished = [];
@@ -611,6 +659,7 @@ async function processSlideOptimization(text) {
 // 8. Results Display & LCS Diff Rendering
 // ============================================================================
 function displayResults(original, corrected, changes, elapsedMs, diffChunks) {
+  hideLoader();
   lastCorrectedOutput = corrected;
 
   // Render text boxes
@@ -1952,7 +2001,8 @@ function startNewConversation() {
     try { removeFileBtn.click(); } catch (e) {}
   }
 
-  // Reset Results View
+  // Reset Results & Loader View
+  hideLoader();
   if (resultsSection) {
     resultsSection.style.display = "none";
   }

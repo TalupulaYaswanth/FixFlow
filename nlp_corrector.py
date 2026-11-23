@@ -376,43 +376,114 @@ class NLPCorrector:
 
     def correct_with_llm(self, text: str, mode: str = "grammar", tone: str = "formal") -> Optional[Tuple[str, List[Dict]]]:
         """
-        Uses Google GenAI SDK (Gemini) if API key is configured.
+        Backward-compatible wrapper routing to context-aware AI correction engine.
         """
-        if not self.genai_client:
+        return self.correct_context_aware_with_llm(text, mode=mode, tone=tone)
+
+    def correct_context_aware_with_llm(self, text: str, mode: str = "spell", tone: str = "formal") -> Optional[Tuple[str, List[Dict]]]:
+        """
+        Uses Google GenAI SDK (Gemini) for deep context-aware linguistic and semantic correction:
+        - Resolves real-word contextual spelling mistakes & homophones (e.g. 'peace of cake' -> 'piece of cake', 'weather' -> 'whether').
+        - Fixes subject-verb agreement and syntactic dependencies ('they is' -> 'they are', 'he dont' -> 'he doesn't').
+        - Eliminates duplicated words, improper articles ('a apple' -> 'an apple'), and semantic friction.
+        - Returns structured granular changes with clear contextual linguistic rationale.
+        """
+        if not self.genai_client or not text or not text.strip():
             return None
 
         prompt = (
-            f"You are FixFlow, an expert linguistic editor and copywriter.\n"
-            f"Target Mode: {mode}\n"
-            f"Target Tone: {tone}\n"
+            f"You are FixFlow's Advanced Context-Aware Linguistic & Semantic Correction Engine.\n"
+            f"Mode: {mode}\n"
+            f"Tone: {tone}\n"
             f"Input Text: \"{text}\"\n\n"
             f"Instructions:\n"
-            f"1. Return ONLY the polished, refined English text.\n"
-            f"2. Maintain original intent while eliminating all grammatical friction, spelling errors, wordiness, tautologies, dangling modifiers, and awkward phrasing.\n"
-            f"3. Do not include markdown code fences, quotes around the output, or introductory comments."
+            f"1. Contextual Spelling & Homophones: Correct words that are spelled validly in isolation but are wrong in context "
+            f"(e.g., 'peace of cake' -> 'piece of cake', 'weather' -> 'whether', 'their' -> 'there'/'they\'re', 'affect' -> 'effect', 'to' -> 'too', 'sea' -> 'see', 'loose' -> 'lose', 'its' -> 'it\'s', 'better then' -> 'better than').\n"
+            f"2. Syntactic & Contextual Agreement: Resolve subject-verb agreement, tense consistency, singular/plural mismatch, and article usage ('a apple' -> 'an apple').\n"
+            f"3. Redundancy & Flow: Remove duplicated words ('the the' -> 'the') and smooth phrasing while preserving 100% of the author's original intent.\n\n"
+            f"Return a valid JSON object strictly matching this schema:\n"
+            f"{{\n"
+            f'  "corrected_text": "<full corrected text>",\n'
+            f'  "contextual_changes": [\n'
+            f'    {{\n'
+            f'      "original": "<original word or phrase>",\n'
+            f'      "replacement": "<corrected word or phrase>",\n'
+            f'      "rule": "<specific contextual rule: Contextual Homophone, Subject-Verb Agreement, Collocation & Idiom, Article Usage, etc.>",\n'
+            f'      "explanation": "<brief rationale explaining why this word was wrong in this specific sentence context>"\n'
+            f'    }}\n'
+            f'  ]\n'
+            f"}}\n"
+            f"Output ONLY the JSON object. Do not include markdown code fences or comments."
         )
 
-        for candidate_model in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        candidate_models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash", "gemini-flash-latest"]
+        for candidate_model in candidate_models:
             try:
                 response = self.genai_client.models.generate_content(
                     model=candidate_model,
                     contents=prompt
                 )
                 if response and response.text:
-                    corrected = response.text.strip()
-                    if corrected.startswith('"') and corrected.endswith('"') and len(corrected) > 2:
-                        corrected = corrected[1:-1].strip()
-                    changes = [{
-                        "rule": "GenAI LLM Polish",
-                        "original": text,
-                        "replacement": corrected,
-                        "explanation": f"Polished and refined using Gemini ({candidate_model}) in '{mode}' mode."
-                    }]
-                    return corrected, changes
+                    raw_out = response.text.strip()
+                    # Strip markdown code blocks if present
+                    if raw_out.startswith("```"):
+                        lines = raw_out.splitlines()
+                        if lines and lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].strip() == "```":
+                            lines = lines[:-1]
+                        raw_out = "\n".join(lines).strip()
+
+                    try:
+                        import json
+                        data = json.loads(raw_out)
+                        corrected = data.get("corrected_text", "").strip()
+                        raw_changes = data.get("contextual_changes", [])
+                        changes = []
+                        for ch in raw_changes:
+                            if isinstance(ch, dict) and ch.get("original") and ch.get("replacement"):
+                                changes.append({
+                                    "original": str(ch["original"]),
+                                    "replacement": str(ch["replacement"]),
+                                    "rule": str(ch.get("rule", "Contextual AI Correction")),
+                                    "explanation": str(ch.get("explanation", f"Refined using Gemini ({candidate_model}) context engine."))
+                                })
+
+                        if corrected and corrected != text:
+                            # If no granular changes were returned by LLM, generate them via diff
+                            if not changes:
+                                changes.append({
+                                    "rule": "Contextual AI Polish",
+                                    "original": text,
+                                    "replacement": corrected,
+                                    "explanation": f"Contextually polished using Gemini ({candidate_model})."
+                                })
+                            return corrected, changes
+                    except Exception:
+                        # If raw response wasn't clean JSON, treat as text
+                        clean_text = raw_out
+                        if clean_text.startswith('"') and clean_text.endswith('"') and len(clean_text) > 2:
+                            clean_text = clean_text[1:-1].strip()
+                        if clean_text and clean_text != text and not clean_text.startswith("{"):
+                            return clean_text, [{
+                                "rule": "Contextual AI Polish",
+                                "original": text,
+                                "replacement": clean_text,
+                                "explanation": f"Polished and refined using Gemini ({candidate_model}) context engine."
+                            }]
             except Exception:
                 continue
 
         return None
+
+    def correct_context_heuristics(self, text: str) -> Tuple[str, List[Dict]]:
+        """
+        Rule-based contextual correction pass when offline or when LLM API is unavailable.
+        Checks homophones, collocations, agreement, and idioms in context.
+        """
+        # Run grammar and context pattern transformations
+        corrected, changes = self.fix_grammar(text)
+        return corrected, changes
 
     def structure_document(self, raw_text: str, filename: Optional[str] = None) -> Tuple[str, List[Dict]]:
         """

@@ -171,7 +171,24 @@ def correct_text(payload: CorrectionRequest):
     should_use_llm = payload.use_llm if payload.use_llm is not None else (nlp_engine.genai_client is not None)
 
     if payload.mode == CorrectionMode.SPELL:
-        corrected_text, changes = dp_engine.correct_text(input_text)
+        # Step 1: Base space-optimized DP Levenshtein pass (fixes non-word spelling errors)
+        dp_text, dp_changes = dp_engine.correct_text(input_text)
+        corrected_text = dp_text
+        changes = list(dp_changes)
+
+        # Step 2: Context-aware pass (resolves real-word homophones, collocations, context errors)
+        if should_use_llm and nlp_engine.genai_client:
+            ai_res = nlp_engine.correct_context_aware_with_llm(corrected_text, mode="spell")
+            if ai_res is not None:
+                ai_text, ai_changes = ai_res
+                if ai_text and ai_text.strip() != corrected_text.strip():
+                    corrected_text = ai_text
+                    changes.extend(ai_changes)
+        else:
+            ctx_text, ctx_changes = nlp_engine.correct_context_heuristics(corrected_text)
+            if ctx_text != corrected_text:
+                corrected_text = ctx_text
+                changes.extend(ctx_changes)
 
     elif payload.mode == CorrectionMode.GRAMMAR:
         # Step 1: Multi-tier local model pass (DP spelling -> NLP grammar)
@@ -180,14 +197,14 @@ def correct_text(payload: CorrectionRequest):
         corrected_text = grammar_text
         changes = spell_changes + grammar_changes
 
-        # Step 2: Post-model AI refinement pass using API if enabled
+        # Step 2: Context-aware AI refinement pass using Gemini API
         if should_use_llm and nlp_engine.genai_client:
-            llm_result = nlp_engine.correct_with_llm(corrected_text, mode="grammar")
-            if llm_result is not None:
-                llm_text, llm_changes = llm_result
-                if llm_text and llm_text.strip() != corrected_text.strip():
-                    corrected_text = llm_text
-                    changes.extend(llm_changes)
+            ai_res = nlp_engine.correct_context_aware_with_llm(corrected_text, mode="grammar")
+            if ai_res is not None:
+                ai_text, ai_changes = ai_res
+                if ai_text and ai_text.strip() != corrected_text.strip():
+                    corrected_text = ai_text
+                    changes.extend(ai_changes)
 
     elif payload.mode == CorrectionMode.TONE:
         target_tone = payload.tone.value if payload.tone else "formal"
@@ -197,14 +214,14 @@ def correct_text(payload: CorrectionRequest):
         corrected_text = tone_text
         changes = spell_changes + tone_changes
 
-        # Step 2: Post-model AI refinement pass using API if enabled
+        # Step 2: Context-aware AI refinement pass using Gemini API
         if should_use_llm and nlp_engine.genai_client:
-            llm_result = nlp_engine.correct_with_llm(corrected_text, mode="tone", tone=target_tone)
-            if llm_result is not None:
-                llm_text, llm_changes = llm_result
-                if llm_text and llm_text.strip() != corrected_text.strip():
-                    corrected_text = llm_text
-                    changes.extend(llm_changes)
+            ai_res = nlp_engine.correct_context_aware_with_llm(corrected_text, mode="tone", tone=target_tone)
+            if ai_res is not None:
+                ai_text, ai_changes = ai_res
+                if ai_text and ai_text.strip() != corrected_text.strip():
+                    corrected_text = ai_text
+                    changes.extend(ai_changes)
 
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported mode: {payload.mode}")

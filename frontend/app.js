@@ -1072,7 +1072,18 @@ document.getElementById("runPromptBtn").addEventListener("click", async () => {
 
 async function processCorrection(text, mode, tone, customTriggerBtn) {
   const triggerBtn = customTriggerBtn || (currentPageId === "files" ? document.getElementById("runDocSpellBtn") : document.getElementById("runDirectBtn"));
-  showLoader("Executing FixFlow Dynamic Programming Engine...", "Computing Levenshtein distance, LCS visual diff & grammar heuristics...", "DP Convergence Active", triggerBtn);
+  const contextAiToggle = document.getElementById("contextAiToggle");
+  const useLlm = contextAiToggle ? contextAiToggle.checked : true;
+
+  const loaderTitle = useLlm
+    ? "Executing Context-Aware Dynamic Programming & AI Engine..."
+    : "Executing FixFlow Dynamic Programming Engine...";
+  const loaderSubtitle = useLlm
+    ? "Evaluating DP Levenshtein Matrix, Contextual Semantics & Gemini AI Lattice..."
+    : "Computing Levenshtein distance, LCS visual diff & grammar heuristics...";
+  const loaderTag = useLlm ? "Context AI Active" : "DP Convergence Active";
+
+  showLoader(loaderTitle, loaderSubtitle, loaderTag, triggerBtn);
   const t0 = performance.now();
   let corrected = text;
   let changes = [];
@@ -1082,7 +1093,7 @@ async function processCorrection(text, mode, tone, customTriggerBtn) {
     const res = await fetch(`${API_BASE}/correct`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, mode, tone })
+      body: JSON.stringify({ text, mode, tone, use_llm: useLlm })
     });
     if (res.ok) {
       const data = await res.json();
@@ -1271,14 +1282,20 @@ function renderStudioResults(channel) {
     data.changes.forEach(c => {
       const orig = escapeHtml(c.original || "");
       const rep = escapeHtml(c.replacement || "");
-      const reason = escapeHtml(c.explanation || c.type || "Adjustment");
+      const rule = escapeHtml(c.rule || c.type || "Adjustment");
+      const reason = escapeHtml(c.explanation || rule);
+      const ruleLower = rule.toLowerCase();
+      const isContextAi = ruleLower.includes("context") || ruleLower.includes("homophone") || ruleLower.includes("agreement") || ruleLower.includes("collocation") || ruleLower.includes("idiom") || ruleLower.includes("article");
+      const tagHtml = isContextAi ? `<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">🧠 Context</span>` : "";
+
       const item = document.createElement("div");
       item.className = "change-item";
       item.innerHTML = `
-        <div>
-          <span class="orig">"${orig}"</span> → <span class="rep">"${rep}"</span>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px;">
+          <div><span class="orig">"${orig}"</span> → <span class="rep">"${rep}"</span></div>
+          ${tagHtml}
         </div>
-        <div class="reason">(${reason})</div>
+        <div class="reason"><strong>${rule}:</strong> ${reason}</div>
       `;
       changesListContainer.appendChild(item);
     });
@@ -1555,8 +1572,16 @@ function clientTone(text, tone) {
 }
 
 function clientCorrect(text, mode, tone) {
+  const contextAiToggle = document.getElementById("contextAiToggle");
+  const useLlm = contextAiToggle ? contextAiToggle.checked : true;
+
   if (mode === "spell") {
     const s = clientSpell(text);
+    // If context awareness is enabled, also apply contextual agreement and homophone heuristics
+    if (useLlm) {
+      const g = clientGrammar(s.text);
+      return { corrected: g.text, changes: [...s.changes, ...g.changes] };
+    }
     return { corrected: s.text, changes: s.changes };
   } else if (mode === "grammar") {
     const s = clientSpell(text);

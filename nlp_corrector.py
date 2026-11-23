@@ -234,6 +234,22 @@ class NLPCorrector:
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not self.api_key:
+            env_file = os.path.join(os.path.dirname(__file__), ".env")
+            if os.path.exists(env_file):
+                try:
+                    with open(env_file, "r", encoding="utf-8") as f:
+                        for line in f:
+                            sline = line.strip()
+                            if sline and "=" in sline and not sline.startswith("#"):
+                                k, v = sline.split("=", 1)
+                                if k.strip() in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+                                    self.api_key = v.strip().strip('"').strip("'")
+                                    os.environ[k.strip()] = self.api_key
+                                    break
+                except Exception:
+                    pass
+
         self.genai_client = None
 
         if self.api_key:
@@ -376,7 +392,7 @@ class NLPCorrector:
             f"3. Do not include markdown code fences, quotes around the output, or introductory comments."
         )
 
-        for candidate_model in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+        for candidate_model in ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash"]:
             try:
                 response = self.genai_client.models.generate_content(
                     model=candidate_model,

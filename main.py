@@ -174,33 +174,37 @@ def correct_text(payload: CorrectionRequest):
         corrected_text, changes = dp_engine.correct_text(input_text)
 
     elif payload.mode == CorrectionMode.GRAMMAR:
-        llm_result = None
-        if should_use_llm:
-            llm_result = nlp_engine.correct_with_llm(input_text, mode="grammar")
+        # Step 1: Multi-tier local model pass (DP spelling -> NLP grammar)
+        spell_text, spell_changes = dp_engine.correct_text(input_text)
+        grammar_text, grammar_changes = nlp_engine.fix_grammar(spell_text)
+        corrected_text = grammar_text
+        changes = spell_changes + grammar_changes
 
-        if llm_result is not None:
-            corrected_text, changes = llm_result
-        else:
-            # Multi-tier pipeline: DP spelling pass -> NLP grammar pass
-            spell_text, spell_changes = dp_engine.correct_text(input_text)
-            grammar_text, grammar_changes = nlp_engine.fix_grammar(spell_text)
-            corrected_text = grammar_text
-            changes = spell_changes + grammar_changes
+        # Step 2: Post-model AI refinement pass using API if enabled
+        if should_use_llm and nlp_engine.genai_client:
+            llm_result = nlp_engine.correct_with_llm(corrected_text, mode="grammar")
+            if llm_result is not None:
+                llm_text, llm_changes = llm_result
+                if llm_text and llm_text.strip() != corrected_text.strip():
+                    corrected_text = llm_text
+                    changes.extend(llm_changes)
 
     elif payload.mode == CorrectionMode.TONE:
         target_tone = payload.tone.value if payload.tone else "formal"
-        llm_result = None
-        if should_use_llm:
-            llm_result = nlp_engine.correct_with_llm(input_text, mode="tone", tone=target_tone)
+        # Step 1: Multi-tier local model pass (DP spelling -> Tone polish)
+        spell_text, spell_changes = dp_engine.correct_text(input_text)
+        tone_text, tone_changes = nlp_engine.polish_tone(spell_text, target_tone=target_tone)
+        corrected_text = tone_text
+        changes = spell_changes + tone_changes
 
-        if llm_result is not None:
-            corrected_text, changes = llm_result
-        else:
-            # Multi-tier pipeline: DP spelling pass -> Tone polish pass (with grammar cleanup)
-            spell_text, spell_changes = dp_engine.correct_text(input_text)
-            tone_text, tone_changes = nlp_engine.polish_tone(spell_text, target_tone=target_tone)
-            corrected_text = tone_text
-            changes = spell_changes + tone_changes
+        # Step 2: Post-model AI refinement pass using API if enabled
+        if should_use_llm and nlp_engine.genai_client:
+            llm_result = nlp_engine.correct_with_llm(corrected_text, mode="tone", tone=target_tone)
+            if llm_result is not None:
+                llm_text, llm_changes = llm_result
+                if llm_text and llm_text.strip() != corrected_text.strip():
+                    corrected_text = llm_text
+                    changes.extend(llm_changes)
 
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported mode: {payload.mode}")

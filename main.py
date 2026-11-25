@@ -13,7 +13,7 @@ FastAPI Backend Server providing RESTful endpoints for:
 
 import time
 import os
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from enum import Enum
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -117,6 +117,160 @@ class SuggestionResponse(BaseModel):
     query_word: str
     suggestions: List[SuggestionItem]
     computation_time_ms: float
+
+
+def trim_common_affixes(orig: str, rep: str) -> Tuple[str, str]:
+    """Trims matching non-alphanumeric punctuation from boundaries."""
+    while orig and rep and orig[0] == rep[0] and not orig[0].isalnum():
+        orig = orig[1:]
+        rep = rep[1:]
+    while orig and rep and orig[-1] == rep[-1] and not orig[-1].isalnum():
+        orig = orig[:-1]
+        rep = rep[:-1]
+    return orig.strip(), rep.strip()
+
+
+def reconcile_changes_with_diff(
+    original_text: str,
+    corrected_text: str,
+    raw_changes: List[Dict[str, Any]],
+    diff_chunks: List[Any]
+) -> List[Dict[str, Any]]:
+    """
+    Reconciles raw multi-tier pipeline changes with ground-truth LCS diff chunks.
+    Guarantees:
+      - 1-to-1 match with the Visual Diff
+      - 'original' is guaranteed to exist in the user's input text
+      - 'replacement' is guaranteed to exist in the final corrected text
+      - Intermediate ghost changes (e.g. lazi -> nazi -> lazy) are collapsed into lazi -> lazy
+      - Rich linguistic rules and explanations from Gemini AI and heuristics are preserved
+    """
+    def get_chunk_info(c):
+        if isinstance(c, (list, tuple)):
+            return c[0], c[1]
+        elif isinstance(c, dict):
+            return c.get('type'), c.get('text', '')
+        return getattr(c, 'type', None), getattr(c, 'text', '')
+
+    edits = []
+    i = 0
+    n = len(diff_chunks)
+
+    while i < n:
+        c_type, c_text = get_chunk_info(diff_chunks[i])
+        if c_type == 'equal':
+            i += 1
+            continue
+
+        del_parts = []
+        ins_parts = []
+
+        while i < n:
+            cur_type, cur_text = get_chunk_info(diff_chunks[i])
+            if cur_type == 'equal':
+                break
+            elif cur_type == 'delete':
+                del_parts.append(cur_text)
+            elif cur_type == 'insert':
+                ins_parts.append(cur_text)
+            i += 1
+
+        raw_orig = "".join(del_parts).strip()
+        raw_rep = "".join(ins_parts).strip()
+        orig_str, rep_str = trim_common_affixes(raw_orig, raw_rep)
+
+        if not orig_str and not rep_str:
+            continue
+        if orig_str == rep_str:
+            continue
+
+        edits.append({"original": orig_str, "replacement": rep_str})
+
+    reconciled = []
+    used_raw = set()
+
+    for edit in edits:
+        orig = edit["original"]
+        rep = edit["replacement"]
+
+        matched_rule = None
+        matched_expl = None
+        matched_idx = -1
+
+        # 1. Exact match on both original and replacement
+        for idx, c in enumerate(raw_changes):
+            if idx in used_raw:
+                continue
+            c_orig = str(c.get("original", "")).strip()
+            c_rep = str(c.get("replacement", "")).strip()
+            if c_orig.lower() == orig.lower() and c_rep.lower() == rep.lower():
+                matched_rule = c.get("rule") or c.get("type")
+                matched_expl = c.get("explanation")
+                matched_idx = idx
+                break
+
+        # 2. Intermediate chain collapse (orig -> X, X -> rep)
+        if not matched_rule:
+            for idx1, c1 in enumerate(raw_changes):
+                c1_orig = str(c1.get("original", "")).strip()
+                c1_rep = str(c1.get("replacement", "")).strip()
+                if c1_orig.lower() == orig.lower():
+                    for idx2, c2 in enumerate(raw_changes):
+                        c2_orig = str(c2.get("original", "")).strip()
+                        c2_rep = str(c2.get("replacement", "")).strip()
+                        if c2_orig.lower() == c1_rep.lower() and c2_rep.lower() == rep.lower():
+                            matched_rule = c2.get("rule") or c1.get("rule") or c2.get("type") or c1.get("type")
+                            matched_expl = c2.get("explanation") or c1.get("explanation")
+                            used_raw.add(idx1)
+                            used_raw.add(idx2)
+                            break
+                    if matched_rule:
+                        break
+
+        # 3. Substring / Token overlap match
+        if not matched_rule:
+            for idx, c in enumerate(raw_changes):
+                if idx in used_raw:
+                    continue
+                c_orig = str(c.get("original", "")).strip()
+                c_rep = str(c.get("replacement", "")).strip()
+                if c_orig and c_rep:
+                    if (c_orig.lower() in orig.lower() or orig.lower() in c_orig.lower()) and \
+                       (c_rep.lower() in rep.lower() or rep.lower() in c_rep.lower()):
+                        matched_rule = c.get("rule") or c.get("type")
+                        matched_expl = c.get("explanation")
+                        matched_idx = idx
+                        break
+
+        if matched_idx != -1:
+            used_raw.add(matched_idx)
+
+        # 4. Fallback inference based on linguistics
+        if not matched_rule:
+            if not orig and rep:
+                matched_rule = "Syntactic Insertion"
+                matched_expl = f"Inserted '{rep}' for complete grammatical structure."
+            elif orig and not rep:
+                matched_rule = "Redundancy Elimination"
+                matched_expl = f"Removed duplicate or unnecessary word '{orig}'."
+            elif orig.lower() == rep.lower():
+                matched_rule = "Capitalization & Typography"
+                matched_expl = f"Adjusted case/formatting for '{orig}'."
+            elif levenshtein_distance(orig, rep) <= 2:
+                matched_rule = "Spelling (DP Levenshtein)"
+                matched_expl = f"Corrected typo '{orig}' to '{rep}'."
+            else:
+                matched_rule = "Contextual Linguistic Polish"
+                matched_expl = f"Refined '{orig}' to '{rep}' for sentence context and flow."
+
+        reconciled.append({
+            "original": orig,
+            "replacement": rep,
+            "rule": matched_rule,
+            "explanation": matched_expl or f"Transformed '{orig}' to '{rep}'."
+        })
+
+    return reconciled
 
 
 class DiffRequest(BaseModel):
@@ -231,11 +385,14 @@ def correct_text(payload: CorrectionRequest):
     edit_dist = levenshtein_distance(input_text, corrected_text)
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
+    # Reconcile raw multi-tier pipeline changes with ground-truth visual diff
+    reconciled_changes = reconcile_changes_with_diff(input_text, corrected_text, changes, diff_chunks)
+
     return CorrectionResponse(
         original_text=input_text,
         corrected_text=corrected_text,
         mode=payload.mode.value,
-        changes=changes,
+        changes=reconciled_changes,
         diff=diff_chunks,
         metrics=Metrics(
             processing_time_ms=round(elapsed_ms, 2),
@@ -243,7 +400,7 @@ def correct_text(payload: CorrectionRequest):
             corrected_char_count=len(corrected_text),
             original_word_count=len(input_text.split()),
             corrected_word_count=len(corrected_text.split()),
-            total_edits=len(changes),
+            total_edits=len(reconciled_changes),
             levenshtein_distance=edit_dist
         )
     )
@@ -373,6 +530,7 @@ async def upload_file_endpoint(
 
     raw_diff = lcs_diff(extracted_text[:2000], corrected[:2000], mode="word")
     edit_dist = levenshtein_distance(extracted_text[:800], corrected[:800])
+    reconciled_changes = reconcile_changes_with_diff(extracted_text[:2000], corrected[:2000], changes, raw_diff)
 
     return {
         "filename": file.filename,
@@ -382,7 +540,8 @@ async def upload_file_endpoint(
         "extracted_text": extracted_text,
         "corrected_text": corrected,
         "diff_preview": [{"type": op, "text": val} for op, val in raw_diff],
-        "total_edits": len(changes),
+        "total_edits": len(reconciled_changes),
+        "changes": reconciled_changes,
         "sample_edit_distance": edit_dist
     }
 

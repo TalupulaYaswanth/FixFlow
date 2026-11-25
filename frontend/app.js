@@ -1310,16 +1310,172 @@ function renderStudioResults(channel) {
   }
 }
 
+function reconcileClientChanges(original, corrected, rawChanges, diffChunks) {
+  const edits = [];
+  let i = 0;
+  const n = diffChunks.length;
+
+  while (i < n) {
+    const chunk = diffChunks[i];
+    if (chunk.type === "equal") {
+      i++;
+      continue;
+    }
+
+    let delStr = "";
+    let insStr = "";
+
+    while (i < n && diffChunks[i].type !== "equal") {
+      if (diffChunks[i].type === "delete") {
+        delStr += diffChunks[i].text;
+      } else if (diffChunks[i].type === "insert") {
+        insStr += diffChunks[i].text;
+      }
+      i++;
+    }
+
+    let origTrim = delStr.trim();
+    let repTrim = insStr.trim();
+
+    while (origTrim.length > 0 && repTrim.length > 0 && origTrim[0] === repTrim[0] && !/[a-zA-Z0-9]/.test(origTrim[0])) {
+      origTrim = origTrim.slice(1).trim();
+      repTrim = repTrim.slice(1).trim();
+    }
+    while (origTrim.length > 0 && repTrim.length > 0 && origTrim[origTrim.length - 1] === repTrim[repTrim.length - 1] && !/[a-zA-Z0-9]/.test(origTrim[origTrim.length - 1])) {
+      origTrim = origTrim.slice(0, -1).trim();
+      repTrim = repTrim.slice(0, -1).trim();
+    }
+
+    if (!origTrim && !repTrim) continue;
+    if (origTrim === repTrim) continue;
+
+    edits.push({ original: origTrim, replacement: repTrim });
+  }
+
+  // If rawChanges already matches edits 1-to-1 with no ghost words, return it directly
+  if (Array.isArray(rawChanges) && rawChanges.length === edits.length) {
+    let perfect = true;
+    for (let k = 0; k < edits.length; k++) {
+      if (!rawChanges[k] || !rawChanges[k].original || rawChanges[k].original.toLowerCase() !== edits[k].original.toLowerCase()) {
+        perfect = false;
+        break;
+      }
+    }
+    if (perfect) return rawChanges;
+  }
+
+  const reconciled = [];
+  const used = new Set();
+  const safeRaw = Array.isArray(rawChanges) ? rawChanges : [];
+
+  for (const edit of edits) {
+    const orig = edit.original;
+    const rep = edit.replacement;
+    let matchedRule = null;
+    let matchedExpl = null;
+    let matchedIdx = -1;
+
+    // 1. Exact match
+    for (let idx = 0; idx < safeRaw.length; idx++) {
+      if (used.has(idx)) continue;
+      const c = safeRaw[idx];
+      const cOrig = String(c.original || "").trim();
+      const cRep = String(c.replacement || "").trim();
+      if (cOrig.toLowerCase() === orig.toLowerCase() && cRep.toLowerCase() === rep.toLowerCase()) {
+        matchedRule = c.rule || c.type;
+        matchedExpl = c.explanation;
+        matchedIdx = idx;
+        break;
+      }
+    }
+
+    // 2. Intermediate collapse (orig -> X, X -> rep)
+    if (!matchedRule) {
+      for (let idx1 = 0; idx1 < safeRaw.length; idx1++) {
+        const c1 = safeRaw[idx1];
+        const c1Orig = String(c1.original || "").trim();
+        const c1Rep = String(c1.replacement || "").trim();
+        if (c1Orig.toLowerCase() === orig.toLowerCase()) {
+          for (let idx2 = 0; idx2 < safeRaw.length; idx2++) {
+            const c2 = safeRaw[idx2];
+            const c2Orig = String(c2.original || "").trim();
+            const c2Rep = String(c2.replacement || "").trim();
+            if (c2Orig.toLowerCase() === c1Rep.toLowerCase() && c2Rep.toLowerCase() === rep.toLowerCase()) {
+              matchedRule = c2.rule || c1.rule || c2.type || c1.type;
+              matchedExpl = c2.explanation || c1.explanation;
+              used.add(idx1);
+              used.add(idx2);
+              break;
+            }
+          }
+          if (matchedRule) break;
+        }
+      }
+    }
+
+    // 3. Substring match
+    if (!matchedRule) {
+      for (let idx = 0; idx < safeRaw.length; idx++) {
+        if (used.has(idx)) continue;
+        const c = safeRaw[idx];
+        const cOrig = String(c.original || "").trim();
+        const cRep = String(c.replacement || "").trim();
+        if (cOrig && cRep) {
+          if ((cOrig.toLowerCase().includes(orig.toLowerCase()) || orig.toLowerCase().includes(cOrig.toLowerCase())) &&
+              (cRep.toLowerCase().includes(rep.toLowerCase()) || rep.toLowerCase().includes(cRep.toLowerCase()))) {
+            matchedRule = c.rule || c.type;
+            matchedExpl = c.explanation;
+            matchedIdx = idx;
+            break;
+          }
+        }
+      }
+    }
+
+    if (matchedIdx !== -1) used.add(matchedIdx);
+
+    // 4. Fallback inference
+    if (!matchedRule) {
+      if (!orig && rep) {
+        matchedRule = "Syntactic Insertion";
+        matchedExpl = `Inserted '${rep}' for complete grammatical structure.`;
+      } else if (orig && !rep) {
+        matchedRule = "Redundancy Elimination";
+        matchedExpl = `Removed duplicate or unneeded word '${orig}'.`;
+      } else if (orig.toLowerCase() === rep.toLowerCase()) {
+        matchedRule = "Capitalization & Typography";
+        matchedExpl = `Adjusted case/formatting for '${orig}'.`;
+      } else if (levenshtein(orig, rep) <= 2) {
+        matchedRule = "Spelling (DP Levenshtein)";
+        matchedExpl = `Corrected typo '${orig}' to '${rep}'.`;
+      } else {
+        matchedRule = "Contextual Linguistic Polish";
+        matchedExpl = `Refined '${orig}' to '${rep}' for sentence context and flow.`;
+      }
+    }
+
+    reconciled.push({
+      original: orig,
+      replacement: rep,
+      rule: matchedRule,
+      explanation: matchedExpl || `Transformed '${orig}' to '${rep}'.`
+    });
+  }
+
+  return reconciled;
+}
+
 function displayResults(original, corrected, changes, elapsedMs, diffChunks, channelId) {
   hideLoader();
   const channel = channelId || currentPageId || "direct";
   const chunks = diffChunks || computeLCSDiff(original, corrected);
+  const reconciled = reconcileClientChanges(original, corrected, changes, chunks);
 
   // Store in isolated studio cache
   studioResults[channel] = {
     original: original,
     corrected: corrected,
-    changes: changes,
+    changes: reconciled,
     elapsedMs: elapsedMs,
     diffChunks: chunks
   };
@@ -1335,7 +1491,7 @@ function displayResults(original, corrected, changes, elapsedMs, diffChunks, cha
       channelLabel: PAGE_TITLES[channel] || "Text Studio",
       original: original,
       corrected: corrected,
-      changesCount: changes.length,
+      changesCount: reconciled.length,
       distance: levenshtein(original, corrected),
       latency: elapsedMs
     });
